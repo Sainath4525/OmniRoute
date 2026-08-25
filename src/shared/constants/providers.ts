@@ -70,6 +70,7 @@ export const AGGREGATOR_PROVIDER_IDS = new Set([
   "kilo-gateway",
   "aimlapi",
   "novita",
+  "opper",
   "piapi",
   "getgoapi",
   "laozhang",

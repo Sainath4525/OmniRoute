@@ -3828,6 +3828,29 @@
       "stream": "https://api.openvecta.com/v1/chat/completions"
     }
   },
+  "opper": {
+    "format": "openai",
+    "headers": {
+      "apiKey": {
+        "Accept": "text/event-stream",
+        "Authorization": "Bearer <TOK>",
+        "Content-Type": "application/json"
+      },
+      "nonStream": {
+        "Authorization": "Bearer <TOK>",
+        "Content-Type": "application/json"
+      },
+      "oauth": {
+        "Accept": "text/event-stream",
+        "Authorization": "Bearer <TOK>",
+        "Content-Type": "application/json"
+      }
+    },
+    "url": {
+      "nonStream": "https://api.opper.ai/v3/compat/chat/completions",
+      "stream": "https://api.opper.ai/v3/compat/chat/completions"
+    }
+  },
   "orcarouter": {
     "format": "openai",
     "headers": {
