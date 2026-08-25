@@ -52,7 +52,7 @@ export const WEB_COOKIE_PROVIDERS = {
     textIcon: "GWeb",
     website: "https://gemini.google.com",
     authHint:
-      "Paste your __Secure-1PSID cookie value from gemini.google.com. Optionally add __Secure-1PSIDTS separated by semicolon.",
+      "Paste the full cookie header, the __Secure-1PSID value, or the JSON export containing cookies from gemini.google.com. Include __Secure-1PSIDTS and __Secure-1PSIDCC when available.",
     subscriptionRisk: true,
     riskNoticeVariant: "webCookie",
     // #7286 Level 2: tools[] is prompt-emulated via webTools.ts (parseToolCallsFromText).

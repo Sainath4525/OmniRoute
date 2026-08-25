@@ -15,6 +15,7 @@
 
 import { BaseExecutor, type ExecuteInput } from "./base.ts";
 import { buildErrorBody, sanitizeErrorMessage } from "../utils/error.ts";
+import { normalizeGeminiCookieInput } from "../utils/geminiCookies.ts";
 import { prepareToolMessages } from "../translator/webTools.ts";
 import { buildToolModeResponse } from "./chatgptWebTools.ts";
 import {
@@ -385,12 +386,6 @@ export function mergeRotatedGeminiCookies(
   }
 
   return merged.map(({ name, value }) => `${name}=${value}`).join("; ");
-}
-
-function normalizeGeminiCookieInput(raw: string, cookieName = "__Secure-1PSID"): string {
-  const trimmed = raw.trim();
-  if (!trimmed) return "";
-  return trimmed.includes("=") ? trimmed : `${cookieName}=${trimmed}`;
 }
 
 function resolveGeminiWebCookie(credentials: ExecuteInput["credentials"]): string {

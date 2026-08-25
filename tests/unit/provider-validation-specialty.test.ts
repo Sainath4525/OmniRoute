@@ -2522,6 +2522,29 @@ test("gemini-web validator: bare value gets __Secure-1PSID prefix", async () => 
   assert.equal(capturedCookie, "__Secure-1PSID=eyJbarevalue");
 });
 
+test("gemini-web validator: accepts cookies JSON exported by browser tools", async () => {
+  let capturedCookie = "";
+  globalThis.fetch = async (url, init = {}) => {
+    if (String(url).includes("gemini.google.com")) {
+      capturedCookie = ((init.headers as Record<string, string>) || {}).Cookie || "";
+      return new Response("ok", { status: 200 });
+    }
+    throw new Error(`unexpected fetch: ${String(url)}`);
+  };
+
+  await validateProviderApiKey({
+    provider: "gemini-web",
+    apiKey: JSON.stringify({
+      cookies: {
+        "__Secure-1PSID": "psid-json",
+        "__Secure-1PSIDTS": "psidts-json",
+      },
+    }),
+  });
+
+  assert.equal(capturedCookie, "__Secure-1PSID=psid-json; __Secure-1PSIDTS=psidts-json");
+});
+
 test("gemini-web validator: 401 → invalid cookie", async () => {
   globalThis.fetch = async () => new Response("unauthorized", { status: 401 });
 
