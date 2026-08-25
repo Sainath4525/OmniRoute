@@ -11314,7 +11314,9 @@
       "noPayload": "Nessun dato payload disponibile per questa voce di log.",
       "correlationId": "ID di correlazione",
       "correlationIdValue": "ID di correlazione: {id}",
-      "detailedPayloadInfo": "Abilita prima il logging dettagliato se desideri la visualizzazione del payload client/provider in quattro fasi per le nuove richieste."
+      "detailedPayloadInfo": "Abilita prima il logging dettagliato se desideri la visualizzazione del payload client/provider in quattro fasi per le nuove richieste.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

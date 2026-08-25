@@ -11314,7 +11314,9 @@
       "noPayload": "Geen payloadgegevens beschikbaar voor deze logvermelding.",
       "correlationId": "Correlatie-ID",
       "correlationIdValue": "Correlatie-ID: {id}",
-      "detailedPayloadInfo": "Schakel eerst gedetailleerde logging in als je de vier-fasen client/provider payloadweergave voor nieuwe verzoeken wilt."
+      "detailedPayloadInfo": "Schakel eerst gedetailleerde logging in als je de vier-fasen client/provider payloadweergave voor nieuwe verzoeken wilt.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

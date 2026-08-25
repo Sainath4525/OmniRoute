@@ -11314,7 +11314,9 @@
       "noPayload": "اس لاگ اندراج کے لیے کوئی پیلوڈ ڈیٹا دستیاب نہیں ہے۔",
       "correlationId": "کورلیشن آئی ڈی",
       "correlationIdValue": "Correlation ID: {id}",
-      "detailedPayloadInfo": "پہلے تفصیلی لاگنگ فعال کریں اگر آپ نئے درخواستوں کے لیے چار مرحلوں کے کلائنٹ/فراہم کنندہ پے لوڈ ویو چاہتے ہیں۔"
+      "detailedPayloadInfo": "پہلے تفصیلی لاگنگ فعال کریں اگر آپ نئے درخواستوں کے لیے چار مرحلوں کے کلائنٹ/فراہم کنندہ پے لوڈ ویو چاہتے ہیں۔",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

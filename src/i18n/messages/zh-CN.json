@@ -11314,7 +11314,9 @@
       "noPayload": "此日志条目没有可用的有效负载数据。",
       "correlationId": "关联 ID",
       "correlationIdValue": "关联 ID: {id}",
-      "detailedPayloadInfo": "如果您想要新请求的四阶段客户端/提供者负载视图，请先启用详细日志记录。"
+      "detailedPayloadInfo": "如果您想要新请求的四阶段客户端/提供者负载视图，请先启用详细日志记录。",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

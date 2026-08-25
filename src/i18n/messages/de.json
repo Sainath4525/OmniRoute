@@ -11316,7 +11316,9 @@
       "noPayload": "Keine Payload-Daten für diesen Protokolleintrag verfügbar.",
       "correlationId": "Korrelations-ID",
       "correlationIdValue": "Korrelations-ID: {id}",
-      "detailedPayloadInfo": "Aktivieren Sie zuerst das detaillierte Protokollieren, wenn Sie die vierstufige Client/Provider-Payload-Ansicht für neue Anfragen wünschen."
+      "detailedPayloadInfo": "Aktivieren Sie zuerst das detaillierte Protokollieren, wenn Sie die vierstufige Client/Provider-Payload-Ansicht für neue Anfragen wünschen.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

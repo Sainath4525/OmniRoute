@@ -11314,7 +11314,9 @@
       "noPayload": "Hakuna data ya payload inayopatikana kwa ajili ya ingizo hili la kumbukumbu.",
       "correlationId": "Kitambulisho cha Uhusiano",
       "correlationIdValue": "Kitambulisho cha Uhusiano: {id}",
-      "detailedPayloadInfo": "Washa ufuatiliaji wa kina kwanza ikiwa unataka mtazamo wa mzigo wa mteja/mtoa huduma wa hatua nne kwa maombi mapya."
+      "detailedPayloadInfo": "Washa ufuatiliaji wa kina kwanza ikiwa unataka mtazamo wa mzigo wa mteja/mtoa huduma wa hatua nne kwa maombi mapya.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

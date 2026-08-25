@@ -11314,7 +11314,9 @@
       "noPayload": "Ingen nyttelastdata tilgjengelig for denne loggoppføringen.",
       "correlationId": "Korrelasjons-ID",
       "correlationIdValue": "Korrelerings-ID: {id}",
-      "detailedPayloadInfo": "Aktiver detaljert logging først hvis du vil ha den fire-trinns klient/leverandør nyttelastvisningen for nye forespørseler."
+      "detailedPayloadInfo": "Aktiver detaljert logging først hvis du vil ha den fire-trinns klient/leverandør nyttelastvisningen for nye forespørseler.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

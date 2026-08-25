@@ -11314,7 +11314,9 @@
       "noPayload": "Aucune donnée de charge utile n’est disponible pour cette entrée de journal.",
       "correlationId": "ID de corrélation",
       "correlationIdValue": "ID de corrélation : {id}",
-      "detailedPayloadInfo": "Activez d’abord la journalisation détaillée si vous voulez voir l’affichage en 4 étapes des payloads client/fournisseur pour les nouvelles requêtes."
+      "detailedPayloadInfo": "Activez d’abord la journalisation détaillée si vous voulez voir l’affichage en 4 étapes des payloads client/fournisseur pour les nouvelles requêtes.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

@@ -11314,7 +11314,9 @@
       "noPayload": "Nu sunt disponibile date de payload pentru această intrare de jurnal.",
       "correlationId": "ID de corelare",
       "correlationIdValue": "ID de corelare: {id}",
-      "detailedPayloadInfo": "Activați mai întâi jurnalizarea detaliată dacă doriți vizualizarea payload-ului client/provider în patru etape pentru cererile noi."
+      "detailedPayloadInfo": "Activați mai întâi jurnalizarea detaliată dacă doriți vizualizarea payload-ului client/provider în patru etape pentru cererile noi.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

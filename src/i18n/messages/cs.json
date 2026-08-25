@@ -11314,7 +11314,9 @@
       "noPayload": "Žádná data o payloadu nejsou k dispozici pro tento záznam.",
       "correlationId": "ID korelace",
       "correlationIdValue": "ID korelace: {id}",
-      "detailedPayloadInfo": "Nejprve povolte podrobné protokolování, pokud chcete čtyřstupňový pohled na payload klienta/poskytovatele pro nové požadavky."
+      "detailedPayloadInfo": "Nejprve povolte podrobné protokolování, pokud chcete čtyřstupňový pohled na payload klienta/poskytovatele pro nové požadavky.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

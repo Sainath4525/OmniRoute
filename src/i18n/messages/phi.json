@@ -11314,7 +11314,9 @@
       "noPayload": "Walang payload data na magagamit para sa log entry na ito.",
       "correlationId": "ID ng Ugnayan",
       "correlationIdValue": "Correlation ID: {id}",
-      "detailedPayloadInfo": "I-enable ang detalyadong pag-log muna kung nais mo ang apat na yugto ng view ng client/provider payload para sa mga bagong kahilingan."
+      "detailedPayloadInfo": "I-enable ang detalyadong pag-log muna kung nais mo ang apat na yugto ng view ng client/provider payload para sa mga bagong kahilingan.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

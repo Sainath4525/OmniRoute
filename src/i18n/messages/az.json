@@ -11314,7 +11314,9 @@
       "noPayload": "Bu log girişi üçün heç bir yük məlumatı mövcud deyil.",
       "correlationId": "Korrelyasiya ID-si",
       "correlationIdValue": "Korrelyasiya ID: {id}",
-      "detailedPayloadInfo": "Əvvəlcə ətraflı qeydiyyatı aktiv edin, əgər yeni tələblər üçün dörd mərhələli müştəri/təchizatçı yük görünüşünü istəyirsinizsə."
+      "detailedPayloadInfo": "Əvvəlcə ətraflı qeydiyyatı aktiv edin, əgər yeni tələblər üçün dörd mərhələli müştəri/təchizatçı yük görünüşünü istəyirsinizsə.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

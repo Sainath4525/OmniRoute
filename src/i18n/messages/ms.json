@@ -11314,7 +11314,9 @@
       "noPayload": "Tiada data payload tersedia untuk entri log ini.",
       "correlationId": "ID Korelasi",
       "correlationIdValue": "ID Korelasi: {id}",
-      "detailedPayloadInfo": "Aktifkan log terperinci terlebih dahulu jika anda ingin pandangan muatan klien/pemberi perkhidmatan empat peringkat untuk permintaan baru."
+      "detailedPayloadInfo": "Aktifkan log terperinci terlebih dahulu jika anda ingin pandangan muatan klien/pemberi perkhidmatan empat peringkat untuk permintaan baru.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

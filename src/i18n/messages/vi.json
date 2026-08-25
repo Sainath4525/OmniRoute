@@ -11316,7 +11316,9 @@
       "noPayload": "Không có dữ liệu payload cho mục nhật ký này.",
       "correlationId": "ID tương quan",
       "correlationIdValue": "ID tương quan: {id}",
-      "detailedPayloadInfo": "Hãy bật ghi nhật ký chi tiết trước nếu bạn muốn xem giao diện payload client/nhà cung cấp gồm 4 giai đoạn cho các yêu cầu mới."
+      "detailedPayloadInfo": "Hãy bật ghi nhật ký chi tiết trước nếu bạn muốn xem giao diện payload client/nhà cung cấp gồm 4 giai đoạn cho các yêu cầu mới.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

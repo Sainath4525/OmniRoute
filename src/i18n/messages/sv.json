@@ -11314,7 +11314,9 @@
       "noPayload": "Ingen payloaddata tillgänglig för denna loggpost.",
       "correlationId": "Korrelations-ID",
       "correlationIdValue": "Korrelations-ID: {id}",
-      "detailedPayloadInfo": "Aktivera detaljerad loggning först om du vill ha den fyrastegs klient/leverantörs payload-vyn för nya förfrågningar."
+      "detailedPayloadInfo": "Aktivera detaljerad loggning först om du vill ha den fyrastegs klient/leverantörs payload-vyn för nya förfrågningar.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

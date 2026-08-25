@@ -11316,7 +11316,9 @@
       "noPayload": "Nenhum dado de payload disponível para esta entrada de log.",
       "correlationId": "ID de Correlação",
       "correlationIdValue": "ID de Correlação: {id}",
-      "detailedPayloadInfo": "Ative o registro detalhado primeiro se você quiser a visualização de carga útil de cliente/provedor em quatro etapas para novas solicitações."
+      "detailedPayloadInfo": "Ative o registro detalhado primeiro se você quiser a visualização de carga útil de cliente/provedor em quatro etapas para novas solicitações.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

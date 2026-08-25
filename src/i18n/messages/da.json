@@ -11314,7 +11314,9 @@
       "noPayload": "Ingen payloaddata tilgængelig for denne logpost.",
       "correlationId": "Korrelations-ID",
       "correlationIdValue": "Korrelation ID: {id}",
-      "detailedPayloadInfo": "Aktivér detaljeret logning først, hvis du ønsker den fire-trins klient/udbyder payload visning for nye anmodninger."
+      "detailedPayloadInfo": "Aktivér detaljeret logning først, hvis du ønsker den fire-trins klient/udbyder payload visning for nye anmodninger.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

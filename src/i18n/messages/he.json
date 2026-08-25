@@ -11314,7 +11314,9 @@
       "noPayload": "אין נתוני payload זמינים עבור רשומת יומן זו.",
       "correlationId": "מזהה קורלציה",
       "correlationIdValue": "מזהה קורלציה: {id}",
-      "detailedPayloadInfo": "אפשר לוגים מפורטים קודם אם אתה רוצה את תצוגת העומס של הלקוח/ספק בארבעה שלבים עבור בקשות חדשות."
+      "detailedPayloadInfo": "אפשר לוגים מפורטים קודם אם אתה רוצה את תצוגת העומס של הלקוח/ספק בארבעה שלבים עבור בקשות חדשות.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

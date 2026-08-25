@@ -11314,7 +11314,9 @@
       "noPayload": "No hay datos de carga útiles disponibles para esta entrada de registro.",
       "correlationId": "ID de correlación",
       "correlationIdValue": "ID de correlación: {id}",
-      "detailedPayloadInfo": "Habilita primero el registro detallado si deseas la vista de carga útil de cliente/proveedor de cuatro etapas para nuevas solicitudes."
+      "detailedPayloadInfo": "Habilita primero el registro detallado si deseas la vista de carga útil de cliente/proveedor de cuatro etapas para nuevas solicitudes.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

@@ -11314,7 +11314,9 @@
       "noPayload": "此日誌條目沒有可用的有效負載數據。",
       "correlationId": "關聯 ID",
       "correlationIdValue": "關聯 ID: {id}",
-      "detailedPayloadInfo": "如果您想要新請求的四階段客戶端/提供者有效載荷視圖，請先啟用詳細日誌記錄。"
+      "detailedPayloadInfo": "如果您想要新請求的四階段客戶端/提供者有效載荷視圖，請先啟用詳細日誌記錄。",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

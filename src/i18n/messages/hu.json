@@ -11314,7 +11314,9 @@
       "noPayload": "Nincs elérhető payload adat ehhez a naplóbejegyzéshez.",
       "correlationId": "Korelációs azonosító",
       "correlationIdValue": "Korelációs azonosító: {id}",
-      "detailedPayloadInfo": "Először engedélyezze a részletes naplózást, ha a négyfázisú kliens/szolgáltató payload nézetet szeretné az új kérésekhez."
+      "detailedPayloadInfo": "Először engedélyezze a részletes naplózást, ha a négyfázisú kliens/szolgáltató payload nézetet szeretné az új kérésekhez.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

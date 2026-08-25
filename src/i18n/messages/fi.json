@@ -11314,7 +11314,9 @@
       "noPayload": "Ei kuormitustietoja saatavilla tälle lokimerkinnälle.",
       "correlationId": "Korrelaatio-ID",
       "correlationIdValue": "Korrelaatio-ID: {id}",
-      "detailedPayloadInfo": "Ota ensin käyttöön yksityiskohtainen lokitus, jos haluat nelivaiheisen asiakas/toimittaja kuormitusnäkymän uusille pyyntöille."
+      "detailedPayloadInfo": "Ota ensin käyttöön yksityiskohtainen lokitus, jos haluat nelivaiheisen asiakas/toimittaja kuormitusnäkymän uusille pyyntöille.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

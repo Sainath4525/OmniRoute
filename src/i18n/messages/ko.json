@@ -11314,7 +11314,9 @@
       "noPayload": "이 로그 항목에 대한 페이로드 데이터가 없습니다.",
       "correlationId": "상관 ID",
       "correlationIdValue": "상관 ID: {id}",
-      "detailedPayloadInfo": "새 요청에 대한 4단계 클라이언트/제공자 페이로드 보기를 원하시면 먼저 자세한 로깅을 활성화하세요."
+      "detailedPayloadInfo": "새 요청에 대한 4단계 클라이언트/제공자 페이로드 보기를 원하시면 먼저 자세한 로깅을 활성화하세요.",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {

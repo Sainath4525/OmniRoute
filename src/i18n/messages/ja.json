@@ -11314,7 +11314,9 @@
       "noPayload": "このログエントリにはペイロードデータがありません。",
       "correlationId": "相関ID",
       "correlationIdValue": "相関ID: {id}",
-      "detailedPayloadInfo": "新しいリクエストのために四段階のクライアント/プロバイダー ペイロードビューを表示したい場合は、まず詳細なログ記録を有効にしてください。"
+      "detailedPayloadInfo": "新しいリクエストのために四段階のクライアント/プロバイダー ペイロードビューを表示したい場合は、まず詳細なログ記録を有効にしてください。",
+      "copyAll": "Copy all",
+      "copiedAll": "Copied all"
     }
   },
   "proxyLogger": {
