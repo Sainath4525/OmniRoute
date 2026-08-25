@@ -407,7 +407,13 @@ describe("Claude Web executor transport orchestration", () => {
     assert.match(executorSource, /export class ClaudeWebExecutor extends BaseExecutor/);
     assert.doesNotMatch(executorSource, /claudeTurnstileSolver|getCfClearanceToken|tryBackedChat/);
     assert.doesNotMatch(indexSource, /ClaudeWebWithAutoRefresh/);
-    assert.match(indexSource, /"claude-web": new ClaudeWebExecutor\(\)/);
-    assert.match(indexSource, /"cw-web": new ClaudeWebExecutor\(\)/);
+    assert.match(
+      indexSource,
+      /"claude-web": \(\) => import\("\.\/claude-web\.ts"\)\.then\(\(m\) => new m\.ClaudeWebExecutor\(\)\)/
+    );
+    assert.match(
+      indexSource,
+      /"cw-web": \(\) => import\("\.\/claude-web\.ts"\)\.then\(\(m\) => new m\.ClaudeWebExecutor\(\)\)/
+    );
   });
 });

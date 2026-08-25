@@ -4,7 +4,7 @@ import assert from "node:assert/strict";
 const { OpencodeExecutor } = await import("../../open-sse/executors/opencode.ts");
 
 /**
- * Behavioral guards for the three type-only fixes in the TS 7 executor slice
+ * Behavioral guards for the type-only fixes in the TS 7 executor slice
  * (see #8484). Each fix restored a type the code already depended on at runtime;
  * these tests pin the runtime contracts so a future "simplification" of the
  * annotations cannot silently change behavior.
@@ -14,7 +14,7 @@ const { OpencodeExecutor } = await import("../../open-sse/executors/opencode.ts"
  * that failed to type-check — no duplicate added here.
  */
 
-describe("OpencodeExecutor — tools truncation survives the narrowing fix", () => {
+describe("OpencodeExecutor — tool body shapes survive the narrowing fix", () => {
   const executor = new OpencodeExecutor("opencode-go");
   const CREDENTIALS = { apiKey: "k" } as Record<string, unknown>;
 
@@ -33,15 +33,15 @@ describe("OpencodeExecutor — tools truncation survives the narrowing fix", () 
     };
   }
 
-  it("truncates an over-long tools array to 128 entries", () => {
+  it("preserves an over-long tools array for the provider-aware limiter", () => {
     const out = executor.transformRequest("oc/kimi-k2.6", bodyWith(200), true, CREDENTIALS) as {
       tools: unknown[];
     };
-    assert.equal(out.tools.length, 128, "upstream rejects more than 128 tools");
+    assert.equal(out.tools.length, 200, "the executor must not impose a hardcoded tool cap");
     assert.deepEqual(
-      (out.tools[127] as { function: { name: string } }).function.name,
-      "tool_127",
-      "truncation keeps the first 128 in order, not an arbitrary slice"
+      (out.tools[199] as { function: { name: string } }).function.name,
+      "tool_199",
+      "the provider-aware chatCore limiter owns any required truncation"
     );
   });
 
@@ -76,4 +76,3 @@ describe("OpencodeExecutor — tools truncation survives the narrowing fix", () 
     assert.equal((out as unknown[]).length, 1);
   });
 });
-

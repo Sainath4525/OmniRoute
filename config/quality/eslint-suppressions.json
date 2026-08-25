@@ -4464,11 +4464,6 @@
       "count": 1
     }
   },
-  "tests/unit/command-code-executor.test.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 2
-    }
-  },
   "tests/unit/command-code-maxtokens-negative-5166.test.ts": {
     "@typescript-eslint/no-explicit-any": {
       "count": 3
@@ -6163,11 +6158,6 @@
     }
   },
   "tests/unit/t3-chat-web.test.ts": {
-    "@typescript-eslint/no-unused-vars": {
-      "count": 1
-    }
-  },
-  "tests/unit/t31-t33-t34-t38-model-specs.test.ts": {
     "@typescript-eslint/no-unused-vars": {
       "count": 1
     }

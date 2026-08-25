@@ -224,7 +224,7 @@ test("Command Code executor passes the upstream OpenAI SSE stream through untouc
     }) +
     "data: [DONE]\n\n";
   let capturedStreamFlag: unknown = null;
-  globalThis.fetch = async (url, init = {}) => {
+  globalThis.fetch = async (_url, init = {}) => {
     capturedStreamFlag = JSON.parse(String(init.body)).stream;
     return new Response(sse, {
       status: 200,
@@ -260,7 +260,7 @@ test("Command Code executor passes the upstream OpenAI JSON through untouched (n
     usage: { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5 },
   };
   let capturedStreamFlag: unknown = null;
-  globalThis.fetch = async (url, init = {}) => {
+  globalThis.fetch = async (_url, init = {}) => {
     capturedStreamFlag = JSON.parse(String(init.body)).stream;
     return new Response(JSON.stringify(upstreamJson), {
       status: 200,
