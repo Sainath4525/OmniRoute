@@ -186,6 +186,28 @@ export async function executeWebSearch(
     credentials = await resolveSearchCredentials(providerConfig.id);
 
     if (!credentials) {
+      // 1. Try credentialed providers first, sorted by cost. Fallback-only
+      // providers are reached only if no configured provider is available.
+      const sortedIds = Object.values(SEARCH_PROVIDERS)
+        .filter((provider) => !provider.fallbackOnly && supportsSearchType(provider, searchType))
+        .sort((a, b) => a.costPerQuery - b.costPerQuery)
+        .map((provider) => provider.id);
+
+      for (const providerId of sortedIds) {
+        if (providerId === providerConfig.id) continue;
+        const altConfig = getSearchProvider(providerId);
+        const altCreds = await resolveSearchCredentials(providerId);
+        if (altConfig && altCreds) {
+          providerConfig = altConfig;
+          credentials = altCreds;
+          break;
+        }
+      }
+    }
+
+    if (!credentials) {
+      // 2. Last resort: fallback-only providers so out-of-the-box search
+      // still works when no credentialed provider is configured.
       const fallbackProviders = Object.values(SEARCH_PROVIDERS)
         .filter((provider) => provider.fallbackOnly && supportsSearchType(provider, searchType))
         .sort((a, b) => a.costPerQuery - b.costPerQuery);
@@ -205,24 +227,6 @@ export async function executeWebSearch(
     }
 
     if (!credentials) {
-      const sortedIds = Object.values(SEARCH_PROVIDERS)
-        .filter((provider) => supportsSearchType(provider, searchType))
-        .sort((a, b) => a.costPerQuery - b.costPerQuery)
-        .map((provider) => provider.id);
-
-      for (const providerId of sortedIds) {
-        if (providerId === providerConfig.id) continue;
-        const altConfig = getSearchProvider(providerId);
-        const altCreds = await resolveSearchCredentials(providerId);
-        if (altConfig && altCreds) {
-          providerConfig = altConfig;
-          credentials = altCreds;
-          break;
-        }
-      }
-    }
-
-    if (!credentials) {
       throw new WebSearchExecutionError(
         `No credentials configured for any search provider. Add an API key for a search provider (${Object.keys(
           SEARCH_PROVIDERS
@@ -231,8 +235,10 @@ export async function executeWebSearch(
       );
     }
 
+    // Exclude fallback-only providers from execution-time alternates.
+    // They are reserved for last-resort primary selection.
     const otherIds = Object.values(SEARCH_PROVIDERS)
-      .filter((provider) => supportsSearchType(provider, searchType))
+      .filter((provider) => !provider.fallbackOnly && supportsSearchType(provider, searchType))
       .sort((a, b) => a.costPerQuery - b.costPerQuery)
       .map((provider) => provider.id)
       .filter((providerId) => providerId !== providerConfig!.id);
