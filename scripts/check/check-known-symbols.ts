@@ -166,17 +166,34 @@ export type ExecutorLike = {
  * Dada a lista de aliases e um resolvedor (getExecutor), retorna os aliases que NÃO
  * resolvem para um BaseExecutor válido (não é instância, ou falta execute/getProvider).
  * isInstance é injetado para manter a função pura/testável com inputs sintéticos.
+ *
+ * O resolvedor é aguardado: desde #11421 o registro é lazy e `getExecutor()` devolve
+ * uma Promise (a classe só é importada e construída no primeiro uso). Sem o await,
+ * TODO alias reprova — uma Promise nunca é `instanceof BaseExecutor` — e a checagem
+ * deixa de proteger qualquer coisa. Uma rejeição também conta como não-conforme: com
+ * carregamento lazy o import de um alias pode falhar em runtime, e esse é exatamente
+ * o símbolo morto que esta sub-checagem existe para achar.
  */
-export function findNonConformingExecutors(
+export async function findNonConformingExecutors(
   aliases: string[],
-  resolve: (alias: string) => ExecutorLike | null | undefined,
+  resolve: (
+    alias: string
+  ) => PromiseLike<ExecutorLike | null | undefined> | ExecutorLike | null | undefined,
   isInstance: (value: unknown) => boolean
-): string[] {
-  return aliases.filter((alias) => {
-    const ex = resolve(alias);
-    if (!ex || !isInstance(ex)) return true;
-    return typeof ex.execute !== "function" || typeof ex.getProvider !== "function";
-  });
+): Promise<string[]> {
+  const verdicts = await Promise.all(
+    aliases.map(async (alias) => {
+      let ex: ExecutorLike | null | undefined;
+      try {
+        ex = await resolve(alias);
+      } catch {
+        return true; // o alias não carrega — símbolo morto
+      }
+      if (!ex || !isInstance(ex)) return true;
+      return typeof ex.execute !== "function" || typeof ex.getProvider !== "function";
+    })
+  );
+  return aliases.filter((_alias, index) => verdicts[index]);
 }
 
 // ───────────────────────────────────────────────────────────────────────────
@@ -460,7 +477,7 @@ async function main(): Promise<void> {
 
   // ── (1) Executor conformance ──────────────────────────────────────────────
   const executorsMod = await import("@omniroute/open-sse/executors/index.ts");
-  const getExecutor = executorsMod.getExecutor as (alias: string) => ExecutorLike;
+  const getExecutor = executorsMod.getExecutor as (alias: string) => Promise<ExecutorLike>;
   const BaseExecutor = executorsMod.BaseExecutor as new (...args: never[]) => unknown;
   const indexSource = readFileSync(resolvePath(REPO_ROOT, "open-sse/executors/index.ts"), "utf8");
   const aliases = extractExecutorAliases(indexSource);
@@ -470,7 +487,7 @@ async function main(): Promise<void> {
     );
   }
   const isExecutorInstance = (value: unknown) => value instanceof BaseExecutor;
-  const badExecutors = findNonConformingExecutors(aliases, getExecutor, isExecutorInstance);
+  const badExecutors = await findNonConformingExecutors(aliases, getExecutor, isExecutorInstance);
   if (badExecutors.length) {
     failures.push(
       `[executor] ${badExecutors.length} alias(es) registrado(s) não resolvem para um BaseExecutor válido (instância + execute() + getProvider()):\n` +
