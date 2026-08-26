@@ -18,6 +18,27 @@ import { getDbInstance } from "./db/core";
 
 type JsonRecord = Record<string, unknown>;
 
+/**
+ * The value to compare a stored `expires_at` against when deciding liveness.
+ *
+ * `setCachedResponse` is the only writer of that column and stores an ISO-8601
+ * string (`"2026-08-26T14:00:00.000Z"`). The column is TEXT, so SQLite orders
+ * it lexicographically — which is fine as long as both sides of the comparison
+ * are spelled the same way. `datetime('now')` is not: it renders the same
+ * instant as `"2026-08-26 14:00:00"`, with a space at index 10 where ISO has a
+ * `T`. `'T'` (0x54) sorts after `' '` (0x20), so a row whose UTC calendar date
+ * is today compares greater than `datetime('now')` no matter what its
+ * time-of-day says, and stays "live" until 00:00 UTC the next day — up to ~24h
+ * past its TTL. Rows dated a previous day still expire correctly, which is why
+ * this never shows up as a permanently stuck cache.
+ *
+ * Comparing ISO to ISO keeps the ordering lexicographic *and* correct. It is
+ * also what `invalidateStale` already does for `created_at`.
+ */
+function nowIso(): string {
+  return new Date().toISOString();
+}
+
 function asRecord(value: unknown): JsonRecord {
   return value && typeof value === "object" && !Array.isArray(value) ? (value as JsonRecord) : {};
 }
@@ -203,9 +224,9 @@ export function getCachedResponse(signature) {
     const db = getDbInstance();
     const row = db
       .prepare(
-        "SELECT response, tokens_saved FROM semantic_cache WHERE signature = ? AND expires_at > datetime('now')"
+        "SELECT response, tokens_saved FROM semantic_cache WHERE signature = ? AND expires_at > ?"
       )
-      .get(signature);
+      .get(signature, nowIso());
 
     if (row) {
       const record = asRecord(row);
@@ -342,8 +363,8 @@ export function getCacheStats() {
   try {
     const db = getDbInstance();
     const row = db
-      .prepare("SELECT COUNT(*) as count FROM semantic_cache WHERE expires_at > datetime('now')")
-      .get();
+      .prepare("SELECT COUNT(*) as count FROM semantic_cache WHERE expires_at > ?")
+      .get(nowIso());
     dbSize = toNumber(asRecord(row).count, 0);
   } catch {
     // DB not available
