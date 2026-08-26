@@ -133,7 +133,11 @@ export { getCustomVisionCapabilityFields };
 // lives in ./catalogCache. Re-exported here because the existing tests import the
 // hooks from this module, and CATALOG_STALE_WHILE_REVALIDATE_MS is part of the
 // documented behavior of this endpoint.
-import { CATALOG_CACHE_TTL_MS_DEFAULT, resolveCachedCatalogResponse } from "./catalogCache";
+import {
+  CATALOG_CACHE_TTL_MS_DEFAULT,
+  resolveCachedCatalogResponse,
+  type BackgroundRefreshScheduler,
+} from "./catalogCache";
 
 export {
   CATALOG_STALE_WHILE_REVALIDATE_MS,
@@ -155,10 +159,16 @@ function yieldCatalogBuildTurn(): Promise<void> {
 /**
  * Build unified OpenAI-compatible model catalog response.
  * Reused by `/api/v1/models` and `/api/v1` to avoid semantic drift (T09).
+ *
+ * `options.scheduleBackgroundRefresh` is the App Router's injection point for the
+ * stale-while-revalidate rebuild (#8728): the route passes Next's `after()` so the
+ * rebuild starts only once the stale body has been flushed. Omitted by non-route
+ * callers, which fall back to the cache module's own default.
  */
 export async function getUnifiedModelsResponse(
   request: Request,
-  corsHeaders: Record<string, string> = {}
+  corsHeaders: Record<string, string> = {},
+  options: { scheduleBackgroundRefresh?: BackgroundRefreshScheduler } = {}
 ) {
   const diagnosticHeaders = getCatalogDiagnosticsHeaders({ request });
 
@@ -200,6 +210,7 @@ export async function getUnifiedModelsResponse(
         hideAutoCombos:
           settingsForAuth?.hideAutoCombos === true || settingsForAuth?.autoRoutingEnabled === false,
         hideNoThinkVariants: settingsForAuth?.hideNoThinkVariants === true,
+        scheduleBackgroundRefresh: options.scheduleBackgroundRefresh,
       }
     );
   } catch (err) {
