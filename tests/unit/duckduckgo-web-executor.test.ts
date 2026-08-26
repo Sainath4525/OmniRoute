@@ -32,7 +32,7 @@ describe("DuckDuckGoWebExecutor", () => {
     it("should export DUCKDUCKGO_BASE constant", () => {
       assert.equal(
         DUCKDUCKGO_BASE,
-        "https://duckduckgo.com",
+        "https://duck.ai",
         "DUCKDUCKGO_BASE should be correct URL"
       );
     });
