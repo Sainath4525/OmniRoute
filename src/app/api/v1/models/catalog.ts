@@ -134,6 +134,7 @@ export { getCustomVisionCapabilityFields };
 // hooks from this module, and CATALOG_STALE_WHILE_REVALIDATE_MS is part of the
 // documented behavior of this endpoint.
 import { CATALOG_CACHE_TTL_MS_DEFAULT, resolveCachedCatalogResponse } from "./catalogCache";
+import type { BackgroundRefreshScheduler } from "./catalogCache";
 
 export {
   CATALOG_STALE_WHILE_REVALIDATE_MS,
@@ -156,9 +157,19 @@ function yieldCatalogBuildTurn(): Promise<void> {
  * Build unified OpenAI-compatible model catalog response.
  * Reused by `/api/v1/models` and `/api/v1` to avoid semantic drift (T09).
  */
+export type UnifiedModelsOptions = {
+  /**
+   * Where a stale-while-revalidate rebuild runs. Route handlers pass Next's
+   * `after()` so the rebuild starts only once the stale response has been
+   * flushed (#8728). Omitted, the cache falls back to `after()` itself.
+   */
+  scheduleBackgroundRefresh?: BackgroundRefreshScheduler;
+};
+
 export async function getUnifiedModelsResponse(
   request: Request,
-  corsHeaders: Record<string, string> = {}
+  corsHeaders: Record<string, string> = {},
+  options?: UnifiedModelsOptions
 ) {
   const diagnosticHeaders = getCatalogDiagnosticsHeaders({ request });
 
@@ -200,6 +211,7 @@ export async function getUnifiedModelsResponse(
         hideAutoCombos:
           settingsForAuth?.hideAutoCombos === true || settingsForAuth?.autoRoutingEnabled === false,
         hideNoThinkVariants: settingsForAuth?.hideNoThinkVariants === true,
+        scheduleBackgroundRefresh: options?.scheduleBackgroundRefresh,
       }
     );
   } catch (err) {
