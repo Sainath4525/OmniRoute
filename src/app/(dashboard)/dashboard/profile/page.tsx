@@ -249,21 +249,23 @@ export default function ProfilePage() {
           <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 gap-4">
             {allBadges.map((badge) => {
               const isEarned = earnedIds.has(badge.id);
+              const isHiddenAndLocked = Boolean(badge.hidden) && !isEarned;
               const earnedInfo = earnedBadges.find((b) => b.badgeId === badge.id);
               const rarityColor = RARITY_COLORS[badge.rarity] || RARITY_COLORS.common;
 
               return (
                 <button
                   key={badge.id}
-                  onClick={() => setSelectedBadge(badge)}
+                  onClick={() => !isHiddenAndLocked && setSelectedBadge(badge)}
+                  disabled={isHiddenAndLocked}
                   className={`relative p-4 rounded-xl border transition-all text-left ${
                     isEarned
                       ? `${rarityColor} bg-surface hover:shadow-md`
-                      : "border-border/50 bg-surface/50 opacity-50 grayscale hover:opacity-70"
+                      : "border-border/50 bg-surface/50 opacity-50 grayscale enabled:hover:opacity-70 disabled:cursor-default"
                   }`}
                 >
                   <div className="text-3xl mb-2">
-                    <BadgeIcon icon={badge.icon} earned={isEarned} />
+                    <BadgeIcon icon={isHiddenAndLocked ? null : badge.icon} earned={isEarned} />
                   </div>
                   <p className="font-semibold text-sm truncate">
                     {badge.hidden && !isEarned ? "???" : translateBadge(badge, "name")}
