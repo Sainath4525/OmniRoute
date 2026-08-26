@@ -407,7 +407,17 @@ describe("Claude Web executor transport orchestration", () => {
     assert.match(executorSource, /export class ClaudeWebExecutor extends BaseExecutor/);
     assert.doesNotMatch(executorSource, /claudeTurnstileSolver|getCfClearanceToken|tryBackedChat/);
     assert.doesNotMatch(indexSource, /ClaudeWebWithAutoRefresh/);
-    assert.match(indexSource, /"claude-web": new ClaudeWebExecutor\(\)/);
-    assert.match(indexSource, /"cw-web": new ClaudeWebExecutor\(\)/);
+
+    // What this guards is WHICH class each alias constructs — the plain executor, not a
+    // wrapper that would drag the standalone solver back in. Read the entry and assert
+    // on the class it names, rather than on one spelling of the registry: #11421 made
+    // every entry a lazy `() => import(...).then((m) => new m.X())` thunk, and a pinned
+    // `new ClaudeWebExecutor()` literal went red on a refactor that never touched this
+    // property.
+    for (const alias of ["claude-web", "cw-web"]) {
+      const entry = indexSource.match(new RegExp(`"${alias}":\\s*(.+)`));
+      assert.ok(entry, `"${alias}" must still be registered in executors/index.ts`);
+      assert.match(entry[1], /\bClaudeWebExecutor\(\)/);
+    }
   });
 });

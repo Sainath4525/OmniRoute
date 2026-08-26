@@ -1,0 +1,1 @@
+- **test(claude-web):** the Turnstile-solver guard asserts which class the `claude-web`/`cw-web` registry entries build instead of pinning the pre-lazy `new ClaudeWebExecutor()` spelling ([#11586](https://github.com/diegosouzapw/OmniRoute/pull/11586))
