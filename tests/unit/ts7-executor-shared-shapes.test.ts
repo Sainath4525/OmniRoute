@@ -14,6 +14,10 @@ const { OpencodeExecutor } = await import("../../open-sse/executors/opencode.ts"
  * that failed to type-check — no duplicate added here.
  */
 
+// NOTE: the former truncates-to-128 guard here is superseded by
+// opencode-tools-no-truncation.test.ts (#11444): tool-list limiting moved to
+// chatCore truncateToolList(); the executor must forward arrays intact.
+
 describe("OpencodeExecutor — tools truncation survives the narrowing fix", () => {
   const executor = new OpencodeExecutor("opencode-go");
   const CREDENTIALS = { apiKey: "k" } as Record<string, unknown>;
@@ -33,17 +37,6 @@ describe("OpencodeExecutor — tools truncation survives the narrowing fix", () 
     };
   }
 
-  it("truncates an over-long tools array to 128 entries", () => {
-    const out = executor.transformRequest("oc/kimi-k2.6", bodyWith(200), true, CREDENTIALS) as {
-      tools: unknown[];
-    };
-    assert.equal(out.tools.length, 128, "upstream rejects more than 128 tools");
-    assert.deepEqual(
-      (out.tools[127] as { function: { name: string } }).function.name,
-      "tool_127",
-      "truncation keeps the first 128 in order, not an arbitrary slice"
-    );
-  });
 
   it("leaves a within-limit tools array untouched", () => {
     const out = executor.transformRequest("oc/kimi-k2.6", bodyWith(10), true, CREDENTIALS) as {
