@@ -76,6 +76,42 @@ function decryptFailureSignature(
 const RECOVERY_HINT =
   "Re-authenticate this account, or verify STORAGE_ENCRYPTION_KEY matches the key used to store it.";
 
+import fs from "fs";
+import path from "path";
+import os from "os";
+
+function ensureSecretLoaded(): string | undefined {
+  if (process.env.NODE_ENV === "test" || process.env.VITEST) {
+    return process.env.STORAGE_ENCRYPTION_KEY;
+  }
+  if (process.env.STORAGE_ENCRYPTION_KEY) {
+    return process.env.STORAGE_ENCRYPTION_KEY;
+  }
+  const candidates = [
+    path.join(os.homedir(), ".omniroute", ".env"),
+    path.join(process.cwd(), ".env"),
+    path.join(os.homedir(), ".hermes", ".env"),
+  ];
+  for (const envPath of candidates) {
+    try {
+      if (fs.existsSync(envPath)) {
+        const content = fs.readFileSync(envPath, "utf8");
+        for (const line of content.split("\n")) {
+          const trimmed = line.trim();
+          if (trimmed.startsWith("STORAGE_ENCRYPTION_KEY=")) {
+            const val = trimmed.split("=", 2)[1]?.trim().replace(/^["'](.*)["']$/, "$1");
+            if (val) {
+              process.env.STORAGE_ENCRYPTION_KEY = val;
+              return val;
+            }
+          }
+        }
+      }
+    } catch {}
+  }
+  return undefined;
+}
+
 /**
  * Derive the PRIMARY encryption key using the static salt.
  * This is the canonical key derivation that all new encryptions use.
@@ -84,7 +120,7 @@ const RECOVERY_HINT =
 function getStaticKey(): Buffer | null {
   if (_staticKey !== null) return _staticKey;
 
-  const secret = process.env.STORAGE_ENCRYPTION_KEY;
+  const secret = ensureSecretLoaded();
   if (!secret || typeof secret !== "string" || secret.trim().length === 0) return null;
 
   try {
@@ -110,7 +146,7 @@ function getStaticKey(): Buffer | null {
 function getLegacyDynamicKey(): Buffer | null {
   if (_legacyDynamicKey !== null) return _legacyDynamicKey;
 
-  const secret = process.env.STORAGE_ENCRYPTION_KEY;
+  const secret = ensureSecretLoaded();
   if (!secret || typeof secret !== "string" || secret.trim().length === 0) return null;
 
   const dynamicSalt = createHash("sha256").update(secret).digest().slice(0, 16);
@@ -124,7 +160,7 @@ function getLegacyDynamicKey(): Buffer | null {
 
 /** Check if encryption is enabled. */
 export function isEncryptionEnabled(): boolean {
-  return !!process.env.STORAGE_ENCRYPTION_KEY;
+  return !!ensureSecretLoaded();
 }
 
 /**
