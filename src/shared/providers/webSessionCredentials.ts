@@ -42,13 +42,6 @@ export const WEB_SESSION_CREDENTIAL_REQUIREMENTS = {
     acceptsFullCookieHeader: true,
     storageKeys: ["cookie"],
   },
-  "tencent-aistudio-web": {
-    kind: "cookie",
-    credentialName: "Cookie header (full)",
-    placeholder: "paste the full Cookie header from aistudio.tencent.ai",
-    acceptsFullCookieHeader: true,
-    storageKeys: ["cookie"],
-  },
   "tinycms-web": {
     kind: "token",
     credentialName: "app-config-uuid",
@@ -58,10 +51,24 @@ export const WEB_SESSION_CREDENTIAL_REQUIREMENTS = {
   },
   "chatgpt-web": {
     kind: "cookie",
-    credentialName: "__Secure-next-auth.session-token",
-    placeholder: "__Secure-next-auth.session-token=...",
+    credentialName: "Session JSON / Access Token / Cookie",
+    placeholder: "Paste session JSON from /api/auth/session, access token, or __Secure-next-auth.session-token=...",
     acceptsFullCookieHeader: true,
-    storageKeys: ["cookie", "sessionToken", "session-token", "__Secure-next-auth.session-token"],
+    guideSteps: [
+      "Fast 1-Click: Open https://chatgpt.com/api/auth/session in your browser (logged in to chatgpt.com).",
+      "Select all and copy the JSON text (Cmd+A / Ctrl+A, then Cmd+C / Ctrl+C).",
+      "Paste the copied JSON directly here and click Check cookie.",
+      "Alternatively, you can paste __Secure-next-auth.session-token from Cookies or a Bearer token directly.",
+    ],
+    storageKeys: [
+      "cookie",
+      "sessionToken",
+      "session-token",
+      "__Secure-next-auth.session-token",
+      "accessToken",
+      "access_token",
+      "token",
+    ],
   },
   "grok-web": {
     kind: "cookie",
@@ -373,12 +380,6 @@ export function getWebSessionCredentialRequirement(
       providerId as keyof typeof WEB_SESSION_CREDENTIAL_REQUIREMENTS
     ] ?? null
   );
-}
-
-export function canUpdateProviderApiKey(authType: unknown, providerId: unknown): boolean {
-  if (authType === "apikey") return true;
-  if (authType !== "cookie") return false;
-  return getWebSessionCredentialRequirement(providerId)?.kind === "token";
 }
 
 export function requiresWebSessionCredential(providerId: unknown): boolean {

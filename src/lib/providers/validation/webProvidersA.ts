@@ -13,20 +13,17 @@ import {
   normalizeSessionCookieHeader,
 } from "@/lib/providers/webCookieAuth";
 
-// kimi-web uses the international (west-facing) `www.kimi.ai` Connect-RPC API by
-// default. `www.kimi.com` is the China-region endpoint — it serves China users but
-// the China region is not reliably reachable from outside CN, so it is not the
-// default. The legacy `kimi.moonshot.cn` domain now 307-redirects every non-CN
-// visitor, and even if you bypass the redirect the old `/api/chat` REST endpoint is
-// gone. The SPA exposes a profile probe at `GET /api/user` that returns the user
-// object at the top level when the `Authorization: Bearer <access_token>` header is
-// valid. Override the endpoint with KIMI_WEB_BASE_URL (opt-in).
+// kimi-web uses the international `www.kimi.com` Connect-RPC API. The legacy
+// `kimi.moonshot.cn` domain now 307-redirects every non-CN visitor, and even
+// if you bypass the redirect the old `/api/chat` REST endpoint is gone. The
+// SPA exposes a profile probe at `GET /api/user` that returns the user object
+// at the top level when the `Authorization: Bearer <access_token>` header is valid.
 export async function validateKimiWebProvider({ apiKey }: any) {
   const rawCred = String(apiKey ?? "").trim();
   if (!rawCred) {
     return {
       valid: false,
-      error: "Missing Kimi access_token from www.kimi.ai localStorage",
+      error: "Missing Kimi access_token from www.kimi.com localStorage",
     };
   }
 
@@ -35,17 +32,17 @@ export async function validateKimiWebProvider({ apiKey }: any) {
     return {
       valid: false,
       error:
-        "Could not find a Kimi access_token. Re-login at https://www.kimi.ai and copy it from localStorage.",
+        "Could not find a Kimi access_token. Re-login at https://www.kimi.com and copy it from localStorage.",
     };
   }
 
   try {
-    const resp = await fetch("https://www.kimi.ai/api/user", {
+    const resp = await fetch("https://www.kimi.com/api/user", {
       headers: {
         Accept: "application/json, text/plain, */*",
         Authorization: `Bearer ${accessToken}`,
-        Origin: "https://www.kimi.ai",
-        Referer: "https://www.kimi.ai/",
+        Origin: "https://www.kimi.com",
+        Referer: "https://www.kimi.com/",
         "User-Agent":
           "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/149.0.0.0 Safari/537.36",
       },
@@ -55,7 +52,7 @@ export async function validateKimiWebProvider({ apiKey }: any) {
       return {
         valid: false,
         error:
-          "Kimi session is invalid or expired — re-login at https://www.kimi.ai and paste a fresh access_token",
+          "Kimi session is invalid or expired — re-login at https://www.kimi.com and paste a fresh access_token",
       };
     }
     if (!resp.ok) {
@@ -69,7 +66,7 @@ export async function validateKimiWebProvider({ apiKey }: any) {
         return {
           valid: false,
           error:
-            "Kimi session token is invalid or expired — re-login at https://www.kimi.ai and paste a fresh access_token",
+            "Kimi session token is invalid or expired — re-login at https://www.kimi.com and paste a fresh access_token",
         };
       }
     } catch {
@@ -119,7 +116,6 @@ export async function validateDeepSeekWebProvider({ apiKey }: any) {
       return {
         valid: false,
         error: "userToken is invalid or expired — get a fresh one from localStorage",
-        statusCode: resp.status,
       };
     }
     if (!resp.ok) {
@@ -127,20 +123,6 @@ export async function validateDeepSeekWebProvider({ apiKey }: any) {
     }
     const json = await resp.json();
     const bizData = json?.data?.biz_data || json?.biz_data;
-
-    // DeepSeek's web endpoint can report auth rejection as HTTP 200 with an
-    // application-level error envelope. Code 40003 is the observed
-    // "Authorization Failed" signal. Preserve the real HTTP behavior while
-    // returning an auth-classifiable status to OmniRoute's connection-test
-    // layer so it is not collapsed into a generic upstream_error.
-    if (Number(json?.code) === 40003) {
-      return {
-        valid: false,
-        error: "userToken is invalid or expired — get a fresh one from localStorage",
-        statusCode: 401,
-      };
-    }
-
     if (!bizData?.token) {
       return {
         valid: false,
@@ -490,21 +472,131 @@ export async function validateGrokWebProvider({ apiKey, providerSpecificData = {
 
 export async function validateChatGptWebProvider({ apiKey, providerSpecificData = {} }: any) {
   try {
+    const rawInput = String(apiKey || "").trim();
+    if (!rawInput) {
+      return { valid: false, error: "API key or session cookie is required" };
+    }
+
+    const { tlsFetchChatGpt, TlsClientUnavailableError } =
+      await import("@omniroute/open-sse/services/chatgptTlsClient.ts");
+
+    // 1. Check if input is a session JSON dump, URL, or raw token (matching Hermes plugin)
+    let directAccessToken: string | null = null;
+    let accountId: string | null = null;
+
+    if (rawInput.startsWith("{") && rawInput.endsWith("}")) {
+      try {
+        const parsed = JSON.parse(rawInput);
+        directAccessToken =
+          parsed?.accessToken ||
+          parsed?.access_token ||
+          parsed?.sessionToken ||
+          parsed?.session_token ||
+          parsed?.tokens?.access_token ||
+          parsed?.tokens?.accessToken ||
+          null;
+        accountId =
+          parsed?.account?.id ||
+          parsed?.user?.id ||
+          parsed?.accountId ||
+          null;
+      } catch {}
+    } else if (rawInput.includes("://") || rawInput.includes("?") || rawInput.includes("#")) {
+      try {
+        const parsedUrl = new URL(rawInput.startsWith("http") ? rawInput : `https://${rawInput}`);
+        const params = new URLSearchParams(parsedUrl.search || parsedUrl.hash.replace(/^#/, ""));
+        const token =
+          params.get("accessToken") ||
+          params.get("access_token") ||
+          params.get("session_token") ||
+          params.get("token") ||
+          params.get("code") ||
+          null;
+        if (token && token.length > 20) {
+          directAccessToken = token;
+          accountId = params.get("account_id") || null;
+        }
+      } catch {}
+    } else if (/^bearer\s+/i.test(rawInput)) {
+      directAccessToken = rawInput.replace(/^bearer\s+/i, "").trim();
+    } else if (/^eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+$/.test(rawInput)) {
+      directAccessToken = rawInput;
+    }
+
+    // Extract accountId from JWT payload if available
+    if (directAccessToken && !accountId && directAccessToken.split(".").length === 3) {
+      try {
+        const payload = JSON.parse(
+          Buffer.from(
+            directAccessToken.split(".")[1].replace(/-/g, "+").replace(/_/g, "/"),
+            "base64"
+          ).toString("utf-8")
+        );
+        accountId = payload?.["https://api.openai.com/auth"]?.chatgpt_account_id || null;
+      } catch {}
+    }
+
+    if (directAccessToken) {
+      try {
+        const testHeaders: Record<string, string> = applyCustomUserAgent(
+          {
+            Accept: "application/json",
+            Authorization: `Bearer ${directAccessToken}`,
+            Origin: "https://chatgpt.com",
+            Referer: "https://chatgpt.com/",
+            "User-Agent":
+              "Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:152.0) Gecko/20100101 Firefox/152.0",
+          },
+          providerSpecificData
+        );
+        if (accountId) testHeaders["chatgpt-account-id"] = accountId;
+
+        const response = await tlsFetchChatGpt(
+          "https://chatgpt.com/backend-api/models?history_and_training_disabled=false",
+          {
+            method: "GET",
+            headers: testHeaders,
+            timeoutMs: 30_000,
+          }
+        );
+
+        if (response.status === 200) {
+          return { valid: true, error: null };
+        }
+        if (response.status === 401 || response.status === 403) {
+          if (!rawInput.startsWith("{")) {
+            // fall through to cookie validation below
+          } else {
+            return {
+              valid: false,
+              error:
+                "ChatGPT session/access token expired — log into chatgpt.com and copy a fresh session",
+            };
+          }
+        }
+      } catch (err: any) {
+        if (err instanceof TlsClientUnavailableError) {
+          return {
+            valid: false,
+            error: `${err.message} (chatgpt-web requires this — without it, Cloudflare blocks every request)`,
+          };
+        }
+        if (rawInput.startsWith("{")) {
+          throw err;
+        }
+      }
+    }
+
+    // 2. Cookie exchange validation
     // Accept bare value, unchunked cookie, chunked (.0/.1) cookies, or full
     // "Cookie: ..." DevTools line. Pass through verbatim once recognised.
-    let cookieHeader = String(apiKey || "").trim();
+    let cookieHeader = rawInput;
     if (/^cookie\s*:\s*/i.test(cookieHeader)) {
       cookieHeader = cookieHeader.replace(/^cookie\s*:\s*/i, "");
     }
     if (!/__Secure-next-auth\.session-token(?:\.\d+)?\s*=/.test(cookieHeader)) {
       cookieHeader = `__Secure-next-auth.session-token=${cookieHeader}`;
     }
-
-    // Use the TLS-impersonating client — Cloudflare on chatgpt.com pins
-    // cf_clearance to JA3/JA4 + HTTP/2 SETTINGS, so plain Node fetch always
-    // gets cf-mitigated: challenge regardless of cookies.
-    const { tlsFetchChatGpt, TlsClientUnavailableError } =
-      await import("@omniroute/open-sse/services/chatgptTlsClient.ts");
 
     let response;
     try {
@@ -555,7 +647,7 @@ export async function validateChatGptWebProvider({ apiKey, providerSpecificData 
       return {
         valid: false,
         error:
-          "Invalid ChatGPT session cookie — re-paste __Secure-next-auth.session-token from chatgpt.com DevTools → Cookies",
+          "Invalid ChatGPT session cookie — re-paste __Secure-next-auth.session-token from chatgpt.com DevTools → Cookies or session JSON from /api/auth/session",
       };
     }
 
@@ -587,7 +679,8 @@ export async function validateChatGptWebProvider({ apiKey, providerSpecificData 
     if (!data?.accessToken) {
       return {
         valid: false,
-        error: "ChatGPT session expired — log into chatgpt.com and copy a fresh cookie",
+        error:
+          "ChatGPT session expired — log into chatgpt.com and copy a fresh cookie or session JSON",
       };
     }
     return { valid: true, error: null };

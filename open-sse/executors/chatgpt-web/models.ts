@@ -4,59 +4,122 @@
 export const MODEL_MAP: Record<string, string> = {
   // ChatGPT backend slugs are also accepted directly for power users / tests.
   "gpt-5-6": "gpt-5-6",
-  "gpt-5-6-thinking": "gpt-5-6-thinking",
+  "gpt-5-6-instant": "gpt-5-6-instant",
   "gpt-5-6-pro": "gpt-5-6-pro",
-  "gpt-5-5": "gpt-5-5",
-  "gpt-5-5-thinking": "gpt-5-5-thinking",
+  "gpt-5-6-thinking": "gpt-5-6-thinking",
+  "gpt-5-6-t-mini": "gpt-5-6-t-mini",
+  "gpt-5-6-mini": "gpt-5-6-mini",
   "gpt-5-5-pro": "gpt-5-5-pro",
+  "gpt-5-5-pro-extended": "gpt-5-5-pro",
+  "gpt-5-5-thinking": "gpt-5-5-thinking",
+  "gpt-5-5": "gpt-5-5",
+  "gpt-5-5-instant": "gpt-5-5-instant",
+  "gpt-5-5-mini": "gpt-5-5-mini",
+  "gpt-5-3": "gpt-5-3",
+  "gpt-5-3-mini": "gpt-5-3-mini",
+  research: "research",
 
-  // Free accounts leave Luna selection to ChatGPT's server-side auto router.
-  "gpt-5.6-luna-free": "auto",
-  "gpt-5.6-luna-free-thinking": "auto",
-
-  // Captured from a real ChatGPT v2 picker conversation. The visible
-  // performance levels select distinct backend model/effort pairs.
-  "gpt-5.6-sol-instant": "gpt-5-6",
-  "gpt-5.6-sol-medium": "gpt-5-6-thinking",
-  "gpt-5.6-sol-high": "gpt-5-6-thinking",
-  "gpt-5.6-sol-xhigh": "gpt-5-6-thinking",
-  "gpt-5.6-sol-pro": "gpt-5-6-pro",
-
-  "gpt-5.5-instant": "gpt-5-5",
-  "gpt-5.5-medium": "gpt-5-5-thinking",
-  "gpt-5.5-high": "gpt-5-5-thinking",
-  "gpt-5.5-xhigh": "gpt-5-5-thinking",
+  // Public OmniRoute dot-form ids exposed by the provider catalog.
+  "gpt-5.6": "gpt-5-6",
+  "gpt-5.6-instant": "gpt-5-6-instant",
+  "gpt-5.6-pro": "gpt-5-6-pro",
+  "gpt-5.6-thinking": "gpt-5-6-thinking",
+  "gpt-5.6-thinking-mini": "gpt-5-6-t-mini",
+  "gpt-5.6-mini": "gpt-5-6-mini",
   "gpt-5.5-pro": "gpt-5-5-pro",
   "gpt-5.5-pro-extended": "gpt-5-5-pro",
-  // Compatibility alias for existing chatgpt-web image integrations. It is
-  // intentionally absent from the provider's visible curated model list.
+  "gpt-5.5-thinking": "gpt-5-5-thinking",
   "gpt-5.5": "gpt-5-5",
+  "gpt-5.5-instant": "gpt-5-5-instant",
+  "gpt-5.5-mini": "gpt-5-5-mini",
+  "gpt-5.3-instant": "gpt-5-3-instant",
+  "gpt-5.3": "gpt-5-3",
+  "gpt-5.3-mini": "gpt-5-3-mini",
+  "deep-research": "research",
+  o3: "o3",
+  "o3-mini": "o3-mini",
+  "gpt-4o": "gpt-4o",
+  "gpt-4o-mini": "gpt-4o-mini",
 };
 
 export type ChatGptThinkingEffort = "standard" | "extended" | "max";
 
-export const MODEL_FORCED_EFFORT: Record<string, ChatGptThinkingEffort | null> = {
-  "gpt-5.6-sol-instant": null,
-  "gpt-5.6-sol-medium": "standard",
-  "gpt-5.6-sol-high": "extended",
-  "gpt-5.6-sol-xhigh": "max",
-  "gpt-5.6-sol-pro": "standard",
-  "gpt-5.5-instant": null,
-  "gpt-5.5-medium": "standard",
-  "gpt-5.5-high": "extended",
-  "gpt-5.5-xhigh": "max",
+export const MODEL_FORCED_EFFORT: Record<string, ChatGptThinkingEffort> = {
+  "gpt-5-6-pro": "standard",
+  "gpt-5.6-pro": "standard",
+  "gpt-5-5-pro": "standard",
+  "gpt-5-5-pro-extended": "extended",
   "gpt-5.5-pro": "standard",
   "gpt-5.5-pro-extended": "extended",
 };
 
-const MODEL_SYSTEM_HINTS: Record<string, readonly string[]> = {
-  // Captured from the Free-account Think toggle. ChatGPT sends this both at
-  // the request root and on the user message metadata.
-  "gpt-5.6-luna-free-thinking": ["reason"],
-};
+/** Set of chatgpt.com slugs that the user_last_used_model_config endpoint
+ * accepts a `thinking_effort` value for, derived from MODEL_MAP so adding a
+ * new thinking entry there automatically extends this set.
+ *
+ * Derived from MODEL_MAP keys (always dot-form) that contain "thinking" or
+ * are the `o3` reasoning model; the values are the chatgpt.com-side slugs. */
+export const THINKING_CAPABLE_SLUGS: ReadonlySet<string> = new Set(
+  Object.entries(MODEL_MAP)
+    .filter(([k]) => k.includes("thinking") || k === "o3")
+    .map(([, v]) => v)
+);
 
-export function resolveChatGptSystemHints(model: string): string[] {
-  return [...(MODEL_SYSTEM_HINTS[model] ?? [])];
+/** chatgpt.com only exposes the thinking-effort toggle on dedicated thinking
+ * models and the o-series. PATCHing for a non-thinking surface is a no-op
+ * (the server accepts it but the routing-time read picks the wrong knob).
+ *
+ * The lookup also catches callers that pass a chatgpt.com slug directly as
+ * the `model` field without MODEL_MAP translation. */
+export function isThinkingCapableModel(modelId: string, slug: string): boolean {
+  return (
+    modelId.includes("thinking") ||
+    modelId === "o3" ||
+    slug.includes("thinking") ||
+    THINKING_CAPABLE_SLUGS.has(slug) ||
+    THINKING_CAPABLE_SLUGS.has(modelId)
+  );
+}
+
+/** Map either a chatgpt.com-native value (`standard`/`extended`/`max`) or the
+ * OpenAI Chat Completions `reasoning_effort` field to the value the
+ * `user_last_used_model_config` endpoint expects.
+ *
+ *   minimal | low | medium | standard  → standard
+ *   high    | extended                 → extended
+ *   xhigh   | max                      → max
+ *
+ * `xhigh` remains a compatibility alias for the highest ChatGPT Web tier.
+ * Returns null for absent/unknown inputs. */
+export function normalizeThinkingEffort(input: unknown): ChatGptThinkingEffort | null {
+  if (typeof input !== "string") return null;
+  const v = input.trim().toLowerCase();
+  if (v === "max" || v === "xhigh") return "max";
+  if (v === "extended" || v === "high") return "extended";
+  if (v === "standard" || v === "low" || v === "medium" || v === "minimal") {
+    return "standard";
+  }
+  return null;
+}
+
+/** Resolve the requested effort for this turn.
+ * Order: `providerSpecificData.thinkingEffort` (raw override, takes native
+ * `standard`/`extended`/`max` values) > `body.reasoning_effort` (top-level
+ * OpenAI Chat Completions field) > `body.reasoning.effort` (Responses-API
+ * nesting). Returns null when the caller did not request one. */
+export function resolveThinkingEffort(
+  body: unknown,
+  providerSpecificData: Record<string, unknown> | undefined
+): ChatGptThinkingEffort | null {
+  if (providerSpecificData && providerSpecificData.thinkingEffort !== undefined) {
+    return normalizeThinkingEffort(providerSpecificData.thinkingEffort);
+  }
+  const b = (body as Record<string, unknown> | null) ?? null;
+  if (!b) return null;
+  const top = normalizeThinkingEffort(b.reasoning_effort);
+  if (top) return top;
+  const nested = (b.reasoning as Record<string, unknown> | undefined)?.effort;
+  return normalizeThinkingEffort(nested);
 }
 
 export interface ResolvedChatGptModel {
@@ -67,16 +130,12 @@ export interface ResolvedChatGptModel {
 
 export function resolveChatGptModel(
   model: string,
-  _body?: unknown,
-  _providerSpecificData?: Record<string, unknown>
+  body: unknown,
+  providerSpecificData: Record<string, unknown> | undefined
 ): ResolvedChatGptModel {
   const slug = MODEL_MAP[model] ?? model;
-  const effort = MODEL_FORCED_EFFORT[model] ?? null;
-  const isPro =
-    model === "gpt-5.6-sol-pro" ||
-    model === "gpt-5.5-pro" ||
-    model === "gpt-5.5-pro-extended" ||
-    slug === "gpt-5-6-pro" ||
-    slug === "gpt-5-5-pro";
+  const forcedEffort = MODEL_FORCED_EFFORT[model] ?? null;
+  const effort = forcedEffort ?? resolveThinkingEffort(body, providerSpecificData);
+  const isPro = slug === "gpt-5-6-pro" || slug === "gpt-5-5-pro";
   return { slug, effort, isPro };
 }
