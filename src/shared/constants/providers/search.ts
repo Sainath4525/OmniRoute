@@ -33,7 +33,7 @@ export const SEARCH_PROVIDERS = {
     color: "#FB542B",
     textIcon: "BR",
     website: "https://brave.com/search/api",
-    hasFree: true,
+    hasFree: false,
     authHint: "Subscription token from Brave Search API dashboard",
   },
   "exa-search": {
