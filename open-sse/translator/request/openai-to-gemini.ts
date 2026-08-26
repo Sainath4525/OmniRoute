@@ -1,4 +1,5 @@
 import { register } from "../registry.ts";
+import { attachToolNameMap } from "../helpers/toolCallHelper.ts";
 import { FORMATS } from "../formats.ts";
 import { ANTIGRAVITY_DEFAULT_SYSTEM } from "../../config/constants.ts";
 import {
@@ -617,10 +618,7 @@ function openaiToGeminiBase(
     }
   }
 
-  const changedToolNameMap = buildChangedToolNameMap(toolNameMap);
-  if (changedToolNameMap) {
-    result._toolNameMap = changedToolNameMap;
-  }
+  attachToolNameMap(result, buildChangedToolNameMap(toolNameMap));
 
   deepCleanUndefined(result);
 
@@ -714,8 +712,8 @@ function wrapInCloudCodeEnvelope(model, cloudCodeRequest, credentials = null) {
     userAgent: getAntigravityEnvelopeUserAgent(credentials),
     requestType: "agent",
   };
-  if (cloudCodeRequest._toolNameMap instanceof Map && cloudCodeRequest._toolNameMap.size > 0) {
-    envelope._toolNameMap = cloudCodeRequest._toolNameMap;
+  if (cloudCodeRequest._toolNameMap instanceof Map) {
+    attachToolNameMap(envelope, cloudCodeRequest._toolNameMap);
   }
 
   // #9030 — Client system content must NOT be combined with default in systemInstruction

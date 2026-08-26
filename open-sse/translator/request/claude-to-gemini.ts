@@ -1,4 +1,5 @@
 import { register } from "../registry.ts";
+import { attachToolNameMap } from "../helpers/toolCallHelper.ts";
 import { FORMATS } from "../formats.ts";
 import {
   DEFAULT_SAFETY_SETTINGS,
@@ -311,10 +312,7 @@ export function claudeToGeminiRequest(model, body, stream, credentials = null) {
   // entries (Read → Read) still need a lowercase alias ("read" → "Read") for
   // gemini-to-claude to restore the casing Claude Code registered (#9568 parity
   // — that fix landed on the openai-to-gemini path only).
-  const changedToolNameMap = buildChangedToolNameMap(toolNameMap);
-  if (changedToolNameMap) {
-    result._toolNameMap = changedToolNameMap;
-  }
+  attachToolNameMap(result, buildChangedToolNameMap(toolNameMap));
 
   // Gemini strictly rejects requests containing consecutive messages with the same role
   // (400 INVALID_ARGUMENT: "Request contains consecutive messages with the same role").

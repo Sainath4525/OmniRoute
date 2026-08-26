@@ -1,4 +1,5 @@
 import { register } from "../registry.ts";
+import { attachToolNameMap } from "../helpers/toolCallHelper.ts";
 import { FORMATS } from "../formats.ts";
 // CLAUDE_SYSTEM_PROMPT import removed — no longer injected unconditionally (#1966/#2130)
 import { supportsClaudeMaxEffort, supportsXHighEffort } from "../../config/providerModels.ts";
@@ -509,9 +510,7 @@ export function openaiToClaudeRequest(model, body, stream, credentials = null) {
   }
 
   // Attach toolNameMap to result for response translation
-  if (toolNameMap.size > 0) {
-    result._toolNameMap = toolNameMap;
-  }
+  attachToolNameMap(result, toolNameMap);
 
   // Empty-messages guard. Claude's Messages API rejects an empty `messages`
   // array with `400 messages: at least one message is required`. This happens
