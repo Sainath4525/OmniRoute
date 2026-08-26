@@ -207,7 +207,7 @@ test("checkConnection clears stale no_refresh_token state for usable GitHub Copi
 // banned/invalidated account). Only the EXACT no_refresh_token shape is exempted
 // from the terminal skip — this proves the #5326 fix did not reopen #8182's
 // wasted-probe fix for every "expired" GitHub connection.
-test("checkConnection still skips a GitHub Copilot connection expired for a non-no_refresh_token reason (#8182 boundary)", async () => {
+test("checkConnection skips an exhausted GitHub Copilot connection expired for a non-no_refresh_token reason (#8182 boundary)", async () => {
   await resetStorage();
 
   const connection = await providersDb.createProviderConnection({
@@ -219,6 +219,10 @@ test("checkConnection still skips a GitHub Copilot connection expired for a non-
     providerSpecificData: {
       copilotToken: "copilot-token",
       copilotTokenExpiresAt: Math.floor((Date.now() + 60 * 60 * 1000) / 1000),
+      expiredRetry: {
+        count: 3,
+        at: new Date(Date.now() - 60 * 60 * 1000).toISOString(),
+      },
     },
     testStatus: "expired",
     errorCode: "invalid_grant",

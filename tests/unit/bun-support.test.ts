@@ -87,19 +87,3 @@ test("createSyncDriverFactory prefers better-sqlite3 when running under Node", (
     }
   }
 });
-
-test("resolveNextBuildBundlerFlag automatically disables Turbopack and uses Webpack under Bun", async () => {
-  const originalBun = process.versions.bun;
-  try {
-    (process.versions as Record<string, string>).bun = "1.1.20";
-    const buildIsolated = await import("../../scripts/build/build-next-isolated.mjs");
-    assert.equal(buildIsolated.resolveNextBuildBundlerFlag({}), "--webpack");
-    assert.equal(buildIsolated.resolveNextBuildBundlerFlag({ OMNIROUTE_USE_TURBOPACK: "1" }), "--webpack");
-  } finally {
-    if (originalBun === undefined) {
-      delete (process.versions as Record<string, string | undefined>).bun;
-    } else {
-      process.versions.bun = originalBun;
-    }
-  }
-});

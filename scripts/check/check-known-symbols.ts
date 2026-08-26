@@ -179,6 +179,17 @@ export function findNonConformingExecutors(
   });
 }
 
+/** Resolve lazy executors before running the synchronous conformance checks. */
+export async function resolveExecutorAliases(
+  aliases: string[],
+  resolve: (alias: string) => Promise<ExecutorLike | null | undefined>
+): Promise<Map<string, ExecutorLike | null | undefined>> {
+  const entries = await Promise.all(
+    aliases.map(async (alias) => [alias, await resolve(alias)] as const)
+  );
+  return new Map(entries);
+}
+
 // ───────────────────────────────────────────────────────────────────────────
 // (3) TRANSLATOR PAIRS — snapshot congelado (catraca: pares não somem)
 // ───────────────────────────────────────────────────────────────────────────
@@ -460,7 +471,9 @@ async function main(): Promise<void> {
 
   // ── (1) Executor conformance ──────────────────────────────────────────────
   const executorsMod = await import("@omniroute/open-sse/executors/index.ts");
-  const getExecutor = executorsMod.getExecutor as (alias: string) => ExecutorLike;
+  const getExecutor = executorsMod.getExecutor as (
+    alias: string
+  ) => Promise<ExecutorLike | null | undefined>;
   const BaseExecutor = executorsMod.BaseExecutor as new (...args: never[]) => unknown;
   const indexSource = readFileSync(resolvePath(REPO_ROOT, "open-sse/executors/index.ts"), "utf8");
   const aliases = extractExecutorAliases(indexSource);
@@ -470,7 +483,12 @@ async function main(): Promise<void> {
     );
   }
   const isExecutorInstance = (value: unknown) => value instanceof BaseExecutor;
-  const badExecutors = findNonConformingExecutors(aliases, getExecutor, isExecutorInstance);
+  const resolvedExecutors = await resolveExecutorAliases(aliases, getExecutor);
+  const badExecutors = findNonConformingExecutors(
+    aliases,
+    (alias) => resolvedExecutors.get(alias),
+    isExecutorInstance
+  );
   if (badExecutors.length) {
     failures.push(
       `[executor] ${badExecutors.length} alias(es) registrado(s) não resolvem para um BaseExecutor válido (instância + execute() + getProvider()):\n` +

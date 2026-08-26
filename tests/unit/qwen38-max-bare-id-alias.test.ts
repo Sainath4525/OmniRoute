@@ -5,23 +5,14 @@ import { resolveModelAlias } from "../../open-sse/services/modelDeprecation.ts";
 import { resolveLifecycle } from "../../open-sse/handlers/chatCore/modelLifecyclePolicy.ts";
 
 /**
- * Bare `qwen3.8-max` was an unroutable id: the model ships everywhere as
- * `qwen3.8-max-preview` (bailian-coding-plan, qoder, qwen-cloud-token-plan, qwen-web),
- * and nothing in the repo declared the short form. A client sending it therefore
+ * Bare `qwen3.8-max` was originally an unroutable id and therefore gained a global
+ * compatibility alias to `qwen3.8-max-preview`. Some providers now advertise the GA
+ * bare id while qoder and bailian-coding-plan still advertise the preview id.
  *
- *   1. missed MODEL_SPECS, so `getModelContextLimit()` fell through to the
- *      `default: 128000` in open-sse/services/contextManager.ts, and the chatCore
- *      preflight rejected any prompt above 128k with `context_length_exceeded`
- *      ("Input exceeds context window ... limit 128000") even though the real
- *      window is 1M; and
- *   2. would have been dispatched verbatim to the upstream, which only knows the
- *      `-preview` id.
- *
- * Both symptoms have one cause — the missing id — so the fix belongs in the
- * deprecation/rename alias map (`BUILT_IN_ALIASES`), which `resolveLifecycle()`
- * applies at open-sse/handlers/chatCore.ts:755, well before both the context
- * preflight and the upstream dispatch. A MODEL_SPECS `aliases` entry would have
- * fixed only (1): spec aliases resolve capabilities, never the dispatched id.
+ * The unscoped compatibility alias remains useful, while provider-aware lifecycle
+ * resolution preserves an id that the selected provider explicitly advertises. The
+ * single preview MODEL_SPECS entry still supplies the shared 1M-token capability data
+ * through its `qwen3.8-max` alias.
  */
 
 const BARE = "qwen3.8-max";
@@ -44,11 +35,18 @@ test("the alias target carries the real 1M window, not the 128k fallback", () =>
   assert.equal(MODEL_SPECS[BARE], undefined);
 });
 
-test("chatCore lifecycle resolution rewrites the model before dispatch", () => {
-  for (const provider of ["qwen-cloud-token-plan", "qoder", "bailian-coding-plan", "qwen-web"]) {
+test("chatCore lifecycle resolution honors each provider catalog", () => {
+  const providerModels = new Map([
+    ["qwen-cloud-token-plan", BARE],
+    ["qwen-web", BARE],
+    ["qoder", CANONICAL],
+    ["bailian-coding-plan", CANONICAL],
+  ]);
+
+  for (const [provider, expectedModel] of providerModels) {
     const [resolvedModel, effectiveModel, lifecycleError] = resolveLifecycle(provider, BARE);
-    assert.equal(resolvedModel, CANONICAL, `resolvedModel for ${provider}`);
-    assert.equal(effectiveModel, CANONICAL, `effectiveModel for ${provider}`);
+    assert.equal(resolvedModel, expectedModel, `resolvedModel for ${provider}`);
+    assert.equal(effectiveModel, expectedModel, `effectiveModel for ${provider}`);
     assert.equal(lifecycleError, null, `unexpected lifecycle rejection for ${provider}`);
   }
 });

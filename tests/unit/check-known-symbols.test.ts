@@ -5,6 +5,7 @@ import {
   diffComboStrategies,
   extractExecutorAliases,
   findNonConformingExecutors,
+  resolveExecutorAliases,
   findMissingTranslatorPairs,
   findNewTranslatorPairs,
   IMPLICIT_DEFAULT_STRATEGIES,
@@ -130,7 +131,7 @@ test("combo dispatch registry (runtime import) covers the canonical strategy set
 test("extractExecutorAliases parses quoted and bare keys from the executors literal", () => {
   const src = [
     'import { Foo } from "./foo.ts";',
-    "const executors = {",
+    "const lazyExecutors = {",
     "  antigravity: new Foo(),",
     "  agy: new Foo(), // Alias",
     '  "amazon-q": new Foo("amazon-q"),',
@@ -149,6 +150,17 @@ test("findNonConformingExecutors returns [] when every alias resolves to a valid
   const resolve = (_alias: string) => good;
   const isInstance = (_value: unknown) => true;
   assert.deepEqual(findNonConformingExecutors(["a", "b"], resolve, isInstance), []);
+});
+
+test("resolveExecutorAliases awaits every lazy executor", async () => {
+  const first = { execute: () => {}, getProvider: () => "a" } as ExecutorLike;
+  const second = { execute: () => {}, getProvider: () => "b" } as ExecutorLike;
+  const resolved = await resolveExecutorAliases(["a", "b"], async (alias) =>
+    alias === "a" ? first : second
+  );
+
+  assert.equal(resolved.get("a"), first);
+  assert.equal(resolved.get("b"), second);
 });
 
 test("findNonConformingExecutors flags an alias that does not resolve at all", () => {

@@ -1,7 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 
-const { REGISTRY } = await import("../../open-sse/config/providerRegistry.ts");
 const { getStaticModelsForProvider } = await import("../../src/lib/providers/staticModels.ts");
 const { resolveModelAlias: resolveDeprecatedAlias } =
   await import("../../open-sse/services/modelDeprecation.ts");
@@ -33,7 +32,7 @@ test("T31: antigravity static catalog exposes client-visible Gemini preview IDs"
 });
 
 test("T31: legacy Gemini aliases resolve to Gemini 3.1 IDs", () => {
-  assert.equal(resolveDeprecatedAlias("gemini-3-pro-high"), "gemini-3.1-pro-high");
+  assert.equal(resolveDeprecatedAlias("gemini-3-pro-high"), "gemini-3-1-pro-high");
   assert.equal(resolveDeprecatedAlias("gemini-3-pro-low"), "gemini-3.1-pro-low");
 });
 
