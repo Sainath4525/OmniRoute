@@ -19,6 +19,7 @@ import {
   type AdmissionAdmitted,
   type AdmissionClock,
   type AdmissionLease,
+  type AdmissionPhase,
   type AdmissionPressure,
   type AdmissionRejectCode,
   type AdmissionReleaseMeta,
@@ -60,7 +61,10 @@ function addSaturated(total: number, delta: number): number {
 
 interface ActiveLeaseRecord {
   id: string;
+  /** Immutable admission-time cost retained for lease diagnostics. */
   cost: number;
+  currentCost: number;
+  phase: AdmissionPhase;
   released: boolean;
   admittedAtMs: number;
   virtualDisposition: VirtualDisposition;
@@ -209,6 +213,19 @@ export class AdaptiveAdmissionController {
 
   snapshot(): AdmissionSnapshot {
     this.sampleIntegral();
+    let preparingCost = 0n;
+    let preparingCount = 0;
+    let generatingCost = 0n;
+    let generatingCount = 0;
+    for (const record of this.active.values()) {
+      if (record.phase === "generation") {
+        generatingCost += BigInt(record.currentCost);
+        generatingCount = addSaturated(generatingCount, 1);
+      } else {
+        preparingCost += BigInt(record.currentCost);
+        preparingCount = addSaturated(preparingCount, 1);
+      }
+    }
     return {
       mode: this.config.mode,
       currentLimit: this.adaptation.currentLimit,
@@ -216,6 +233,10 @@ export class AdaptiveAdmissionController {
       maxLimit: this.config.maxLimit,
       activeCost: bigintToSnapshotNumber(this.activeCost),
       activeCount: saturateSnapshotNumber(this.active.size),
+      preparingCost: bigintToSnapshotNumber(preparingCost),
+      preparingCount: saturateSnapshotNumber(preparingCount),
+      generatingCost: bigintToSnapshotNumber(generatingCost),
+      generatingCount: saturateSnapshotNumber(generatingCount),
       queuedCost: saturateSnapshotNumber(this.queue.totalCost),
       queuedCount: saturateSnapshotNumber(this.queue.size),
       virtualActiveCost: saturateSnapshotNumber(this.virtualActiveCost),
@@ -420,11 +441,23 @@ export class AdaptiveAdmissionController {
   private admitVirtual(cost: number): AdmissionAdmitted {
     // Mode off: no accounting.
     const id = nextId("lease");
+    let phase: AdmissionPhase = "preparation";
+    let currentCost = cost;
     const lease: AdmissionLease = {
       id,
       cost,
+      get currentCost() {
+        return currentCost;
+      },
+      get phase() {
+        return phase;
+      },
       get released() {
         return true;
+      },
+      transitionToGeneration: () => {
+        phase = "generation";
+        currentCost = Math.min(currentCost, this.config.costConfig.streamingClassCost);
       },
       release: () => {
         /* no-op */
@@ -440,6 +473,8 @@ export class AdaptiveAdmissionController {
     const record: ActiveLeaseRecord = {
       id,
       cost,
+      currentCost: cost,
+      phase: "preparation",
       released: false,
       admittedAtMs: this.clock.now(),
       virtualDisposition,
@@ -452,14 +487,37 @@ export class AdaptiveAdmissionController {
     const lease: AdmissionLease = {
       id,
       cost,
+      get currentCost() {
+        return record.currentCost;
+      },
+      get phase() {
+        return record.phase;
+      },
       get released() {
         return record.released;
+      },
+      transitionToGeneration() {
+        controller.transitionLeaseToGeneration(record);
       },
       release(outcome: AdmissionReleaseOutcome = "success", meta?: AdmissionReleaseMeta) {
         controller.releaseLease(record, outcome, meta);
       },
     };
     return { status: "admitted", lease };
+  }
+
+  private transitionLeaseToGeneration(record: ActiveLeaseRecord): void {
+    if (record.released || record.phase === "generation") return;
+    const nextCost = Math.min(record.currentCost, this.config.costConfig.streamingClassCost);
+    this.sampleIntegral();
+    if (this.active.has(record.id) && nextCost < record.currentCost) {
+      const previousCost = record.currentCost;
+      this.activeCost -= BigInt(previousCost - nextCost);
+      record.currentCost = nextCost;
+      this.transitionVirtualCost(record, previousCost);
+    }
+    record.phase = "generation";
+    this.dispatch();
   }
 
   private releaseLease(
@@ -473,7 +531,7 @@ export class AdaptiveAdmissionController {
     this.sampleIntegral();
     if (this.active.has(record.id)) {
       this.active.delete(record.id);
-      this.activeCost -= BigInt(record.cost);
+      this.activeCost -= BigInt(record.currentCost);
     }
 
     const latency =
@@ -787,7 +845,7 @@ export class AdaptiveAdmissionController {
 
   private releaseVirtual(record: ActiveLeaseRecord): void {
     if (record.virtualDisposition === "active") {
-      this.virtualActiveCost -= record.cost;
+      this.virtualActiveCost -= record.currentCost;
       this.virtualActiveCount -= 1;
     } else if (record.virtualDisposition === "queued") {
       this.virtualQueue.removeById(record.id);
@@ -805,9 +863,26 @@ export class AdaptiveAdmissionController {
       const record = this.active.get(entry.payload.recordId);
       if (!record || record.released) continue;
       record.virtualDisposition = "active";
-      this.virtualActiveCost = addSaturated(this.virtualActiveCost, record.cost);
+      this.virtualActiveCost = addSaturated(this.virtualActiveCost, record.currentCost);
       this.virtualActiveCount = addSaturated(this.virtualActiveCount, 1);
     }
+  }
+
+  private transitionVirtualCost(record: ActiveLeaseRecord, previousCost: number): void {
+    if (record.virtualDisposition === "active") {
+      this.virtualActiveCost = Math.max(
+        0,
+        this.virtualActiveCost - (previousCost - record.currentCost)
+      );
+      this.dispatchVirtual();
+      return;
+    }
+    if (record.virtualDisposition !== "queued") return;
+    const entry = this.virtualQueue.removeById(record.id);
+    if (!entry) return;
+    const resized = { ...entry, cost: record.currentCost };
+    record.virtualDisposition = this.virtualQueue.enqueue(resized) ? "queued" : "rejected";
+    this.dispatchVirtual();
   }
 
   private rebuildVirtualState(enable: boolean): void {
@@ -818,19 +893,19 @@ export class AdaptiveAdmissionController {
     if (!enable) return;
     for (const record of this.active.values()) {
       // Individually oversized work is virtual-rejected, never virtually queued.
-      if (record.cost > this.adaptation.currentLimit) {
+      if (record.currentCost > this.adaptation.currentLimit) {
         record.virtualDisposition = "rejected";
         continue;
       }
-      if (record.cost <= this.adaptation.currentLimit - this.virtualActiveCost) {
+      if (record.currentCost <= this.adaptation.currentLimit - this.virtualActiveCost) {
         record.virtualDisposition = "active";
-        this.virtualActiveCost = addSaturated(this.virtualActiveCost, record.cost);
+        this.virtualActiveCost = addSaturated(this.virtualActiveCost, record.currentCost);
         this.virtualActiveCount = addSaturated(this.virtualActiveCount, 1);
       } else if (
         this.virtualQueue.enqueue({
           id: record.id,
           tenantKey: "_existing",
-          cost: record.cost,
+          cost: record.currentCost,
           enqueuedAtMs: record.admittedAtMs,
           deadlineMs: Number.MAX_SAFE_INTEGER,
           payload: { recordId: record.id },

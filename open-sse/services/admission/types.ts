@@ -24,6 +24,9 @@ export type AdmissionMode = "off" | "shadow" | "enforce";
 
 export type AdmissionPressure = "normal" | "high" | "critical";
 
+/** Request lifecycle phase represented by an active weighted lease. */
+export type AdmissionPhase = "preparation" | "generation";
+
 /** Local outcome categories. Upstream business errors must not collapse capacity. */
 export type AdmissionReleaseOutcome =
   "success" | "upstream_error" | "timeout" | "local_reject" | "cancelled";
@@ -117,8 +120,17 @@ export interface AdmissionReleaseMeta {
 
 export interface AdmissionLease {
   readonly id: string;
+  /** Immutable cost calculated when request preparation was admitted. */
   readonly cost: number;
+  /** Cost currently charged to the shared weighted budget. */
+  readonly currentCost: number;
+  readonly phase: AdmissionPhase;
   readonly released: boolean;
+  /**
+   * Drop the preparation reservation to the configured streaming-generation class.
+   * Idempotent and monotonic: it can only reduce active cost.
+   */
+  transitionToGeneration(): void;
   release(outcome?: AdmissionReleaseOutcome, meta?: AdmissionReleaseMeta): void;
 }
 
@@ -149,6 +161,10 @@ export interface AdmissionSnapshot {
   maxLimit: number;
   activeCost: number;
   activeCount: number;
+  preparingCost: number;
+  preparingCount: number;
+  generatingCost: number;
+  generatingCount: number;
   queuedCost: number;
   queuedCount: number;
   virtualActiveCost: number;

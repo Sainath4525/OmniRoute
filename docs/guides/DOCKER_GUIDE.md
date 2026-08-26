@@ -263,29 +263,48 @@ Measured on this tree (`--target runner-base`, `OMNIROUTE_BUILD_MEMORY_MB=6144`)
 
 ### Runtime defaults
 
-Defaults exported by `runner-base`: `PORT=20128`, `HOSTNAME=0.0.0.0`, `OMNIROUTE_MEMORY_MB=1024`, `NODE_OPTIONS=--max-old-space-size=1024`, `DATA_DIR=/app/data`, `OMNIROUTE_MIGRATIONS_DIR=/app/migrations`.
+Defaults exported by `runner-base`: `PORT=20128`, `HOSTNAME=0.0.0.0`,
+`DATA_DIR=/app/data`, and `OMNIROUTE_MIGRATIONS_DIR=/app/migrations`. The image does
+not pin `OMNIROUTE_MEMORY_MB` or a runtime `NODE_OPTIONS` heap.
 
 Memory behavior in Docker:
 
-- The image sets `OMNIROUTE_MEMORY_MB=1024` and derives `NODE_OPTIONS=--max-old-space-size=1024` from it.
-- The actual server process is started by the standalone launcher, which reads `OMNIROUTE_MEMORY_MB` and appends `--max-old-space-size=<OMNIROUTE_MEMORY_MB>`.
-- Node uses the last repeated `--max-old-space-size` value, so setting `OMNIROUTE_MEMORY_MB` controls the effective Docker heap limit.
-- Because the image always sets it, the launcher's own RAM-calibrated fallback never applies under Docker. Raise it explicitly for the workload (table below). `2048` is still too small for coding-agent `/v1/responses`.
+- Before starting the actual server Node process, the standalone launcher targets ~35%
+  of the tightest trustworthy host-total, cgroup-v1/v2, process constraint, host-free,
+  or current process-available-plus-launcher-RSS budget, clamped to `[64, 16384]` MiB.
+- The launcher passes that absolute `--max-old-space-size` through `NODE_OPTIONS` before
+  the server starts. The repository's current Node runtime exposes absolute
+  `--max-old-space-size` (and `--max-heap-size`) but no percentage-based old-space flag;
+  OmniRoute keeps `OMNIROUTE_MEMORY_MB` as its one repository-native heap contract.
+- An explicit `OMNIROUTE_MEMORY_MB` still wins over a conflicting `NODE_OPTIONS` heap
+  through Node's last-flag semantics. When `OMNIROUTE_MEMORY_MB` is unset, an
+  operator-supplied `NODE_OPTIONS=--max-old-space-size=...` is preserved.
+- The official Compose file does not override either knob, so automatic derivation is
+  active by default. Small cgroups contract instead of inheriting the host's RAM size.
 
 ### Runtime RAM for coding agents
 
-The 1 GiB Docker default is a dashboard/light-chat floor, not a production size. Long `POST /v1/responses` bodies (hundreds of messages, tens of tools) retain multiple in-memory graphs during compression. Two overlapping ~3 MiB / ~750k-token requests have aborted V8 at a **12 GiB** old-space (`FATAL ERROR: Reached heap limit`) and also hit a 16 GiB cgroup OOM. See [#7849](https://github.com/diegosouzapw/OmniRoute/issues/7849).
+The former fixed 1 GiB Docker heap was a dashboard/light-chat floor, not a production
+size. Long `POST /v1/responses` bodies (hundreds of messages, tens of tools) retain
+multiple in-memory graphs during compression. Two overlapping ~3 MiB / ~750k-token
+requests have aborted V8 at a **12 GiB** old-space (`FATAL ERROR: Reached heap limit`)
+and also hit a 16 GiB cgroup OOM. See
+[#7849](https://github.com/diegosouzapw/OmniRoute/issues/7849).
 
 Size **cgroup `--memory` above the heap** — native buffers, SQLite, and compression intermediates sit outside V8.
 
-| Workload                             | `OMNIROUTE_MEMORY_MB`  | Container / cgroup   | Notes                                                                                       |
-| ------------------------------------ | ---------------------- | -------------------- | ------------------------------------------------------------------------------------------- |
-| Dashboard, one light chat            | `1024` (image default) | ≥2 GiB               |                                                                                             |
-| One coding agent (Claude/Codex/Grok) | `8192`                 | ≥10 GiB              | Typical single-session `/v1/responses`                                                      |
-| Two concurrent long `/v1/responses`  | `10240`–`12288`        | ≥12–16 GiB           | Measured V8 abort at ~12 GiB heap                                                           |
-| Three+ concurrent long contexts      | do not on one process  | serialize / more RAM | Default heavyweight admission is 1 in-flight; raising it without RAM reintroduces the abort |
+| Workload                             | `OMNIROUTE_MEMORY_MB` | Container / cgroup   | Notes                                                                                    |
+| ------------------------------------ | --------------------- | -------------------- | ---------------------------------------------------------------------------------------- |
+| Dashboard, one light chat            | auto                  | workload-dependent   | Default launcher derivation; no fixed image heap                                         |
+| One coding agent (Claude/Codex/Grok) | `8192`                | ≥10 GiB              | Typical single-session `/v1/responses`                                                   |
+| Two concurrent long `/v1/responses`  | `10240`–`12288`       | ≥12–16 GiB           | Measured V8 abort at ~12 GiB heap                                                        |
+| Concurrent structurally-heavy work   | auto on a large host  | ample free memory    | Capacity follows the validated resource profile and contracts immediately under pressure |
+| Extreme long contexts                | workload-specific     | serialize / more RAM | Structural admission does not replace workload measurement or hard body/queue bounds     |
 
-`omniroute serve` on bare metal calibrates ~35% of RAM (clamped `[512, 4096]`) when `OMNIROUTE_MEMORY_MB` is **unset**. Docker always sets `1024`, so that calibration never runs in the official image.
+The automatic heap ceiling is not a promise that every request can consume that amount. Live
+admission separately reserves bounded per-request capacity, contracts on immediate pressure,
+and recovers only after a stable interval. An explicit value remains appropriate for a
+measured workload or an operator policy.
 
 ```bash
 docker run -d --name omniroute --restart unless-stopped --stop-timeout 40 \
@@ -297,19 +316,19 @@ docker run -d --name omniroute --restart unless-stopped --stop-timeout 40 \
 
 Beyond the defaults documented in [ENVIRONMENT.md](../reference/ENVIRONMENT.md), the following variables matter most when running under Docker:
 
-| Variable                      | Purpose                                                                                                                                                                    | Default                  |
-| ----------------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------ |
-| `OMNIROUTE_WS_BRIDGE_SECRET`  | Shared secret for the WebSocket bridge. **Required in production** — set to a strong random string.                                                                        | unset (must be provided) |
-| `REDIS_URL`                   | Connection string for the rate limiter / cache backend                                                                                                                     | `redis://redis:6379`     |
-| `REDIS_PORT`                  | Host-side port for the bundled Redis container                                                                                                                             | `6379`                   |
-| `REDIS_BIND_HOST`             | Host interface the bundled Redis port is published on (loopback unless you add AUTH)                                                                                       | `127.0.0.1`              |
-| `AUTO_UPDATE_HOST_REPO_DIR`   | Host path mounted into `cli` profile at `/workspace/omniroute` for self-update workflows                                                                                   | `.` (current directory)  |
-| `OMNIROUTE_MEMORY_MB`         | Runtime Node heap ceiling for the Docker standalone server; overrides the image default above. Coding agents: `8192`+ (see [runtime RAM](#runtime-ram-for-coding-agents)). | `1024`                   |
-| `DASHBOARD_PORT` / `API_PORT` | Override exposed ports for dashboard (20128) and API (20129)                                                                                                               | `20128` / `20129`        |
-| `OMNIROUTE_BASE_PATH`         | URL subpath when the app is published behind a reverse proxy (e.g. `/omniroute`)                                                                                           | _(empty = root)_         |
-| `NEXT_PUBLIC_BASE_URL`        | Public browser origin including the subpath (e.g. `https://host/omniroute`)                                                                                                | unset                    |
-| `PROD_DASHBOARD_PORT`         | Host-side dashboard port for `docker-compose.prod.yml`                                                                                                                     | `20130`                  |
-| `CLIPROXYAPI_PORT`            | Host-side port for the `cliproxyapi` sidecar                                                                                                                               | `8317`                   |
+| Variable                      | Purpose                                                                                                                                                                                                                              | Default                  |
+| ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------ | ------------------------ |
+| `OMNIROUTE_WS_BRIDGE_SECRET`  | Shared secret for the WebSocket bridge. **Required in production** — set to a strong random string.                                                                                                                                  | unset (must be provided) |
+| `REDIS_URL`                   | Connection string for the rate limiter / cache backend                                                                                                                                                                               | `redis://redis:6379`     |
+| `REDIS_PORT`                  | Host-side port for the bundled Redis container                                                                                                                                                                                       | `6379`                   |
+| `REDIS_BIND_HOST`             | Host interface the bundled Redis port is published on (loopback unless you add AUTH)                                                                                                                                                 | `127.0.0.1`              |
+| `AUTO_UPDATE_HOST_REPO_DIR`   | Host path mounted into `cli` profile at `/workspace/omniroute` for self-update workflows                                                                                                                                             | `.` (current directory)  |
+| `OMNIROUTE_MEMORY_MB`         | Optional runtime Node heap ceiling for the Docker standalone server; overrides automatic host/cgroup/process-available derivation. Large coding-agent contexts may need `8192`+ (see [runtime RAM](#runtime-ram-for-coding-agents)). | auto                     |
+| `DASHBOARD_PORT` / `API_PORT` | Override exposed ports for dashboard (20128) and API (20129)                                                                                                                                                                         | `20128` / `20129`        |
+| `OMNIROUTE_BASE_PATH`         | URL subpath when the app is published behind a reverse proxy (e.g. `/omniroute`)                                                                                                                                                     | _(empty = root)_         |
+| `NEXT_PUBLIC_BASE_URL`        | Public browser origin including the subpath (e.g. `https://host/omniroute`)                                                                                                                                                          | unset                    |
+| `PROD_DASHBOARD_PORT`         | Host-side dashboard port for `docker-compose.prod.yml`                                                                                                                                                                               | `20130`                  |
+| `CLIPROXYAPI_PORT`            | Host-side port for the `cliproxyapi` sidecar                                                                                                                                                                                         | `8317`                   |
 
 ## Reverse Proxy on a Subpath (Traefik / nginx)
 
@@ -555,7 +574,12 @@ spec:
             periodSeconds: 20
 ```
 
-`preStop` sleep lets kube drop Service endpoints before SIGTERM so **new** traffic stops hitting the dying process. In-flight `/v1/responses` SSE is drained up to `SHUTDOWN_TIMEOUT_MS` (default 30s) via heavyweight admission leases (#11015). New requests that still reach the process get `503` + `Retry-After: 5`. The Recreate empty-endpoint gap until the replacement is Ready remains a hard outage — that is the SQLite topology, not a probe misconfig.
+`preStop` sleep lets kube drop Service endpoints before SIGTERM so **new** traffic stops
+hitting the dying process. Structural heavyweight leases now cover request preparation,
+not the full SSE lifetime; adaptive response lifecycle and #11493's provider semaphore
+own generation release and cancellation. New requests that still reach the process get
+`503` + `Retry-After: 5`. The Recreate empty-endpoint gap until the replacement is Ready
+remains a hard outage — that is the SQLite topology, not a probe misconfig.
 
 External Postgres / multi-writer HA is **not** a documented stock path. If you need HA, keep a single replica or run a topology the project has tested and documented separately. The Postgres/MySQL work lives in [#8075](https://github.com/diegosouzapw/OmniRoute/issues/8075). Until that ships, the only supported way to multiply **large** `/v1/responses` capacity is N independent processes (next section), not `replicas > 1` on one volume.
 

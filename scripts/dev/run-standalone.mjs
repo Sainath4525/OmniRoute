@@ -4,9 +4,8 @@ import { existsSync } from "node:fs";
 import {
   resolveRuntimePorts,
   withRuntimePortEnv,
-  resolveMaxOldSpaceMb,
   warnConflictingHeapLimits,
-  buildStandaloneNodeOptions,
+  resolveStandaloneHeapConfiguration,
   spawnWithForwardedSignals,
 } from "../build/runtime-env.mjs";
 import { bootstrapEnv } from "../build/bootstrap-env.mjs";
@@ -18,10 +17,11 @@ const childEnv = withRuntimePortEnv(env, runtimePorts);
 // #2939 / #10353: OMNIROUTE_MEMORY_MB is the Docker/standalone heap knob.
 // When it is set, we append --max-old-space-size last (V8 last-flag wins).
 // When it is unset and NODE_OPTIONS already pins the heap, keep NODE_OPTIONS
-// (#5238). Warn when both are set and the numbers disagree.
-const maxOldSpaceMb = resolveMaxOldSpaceMb(childEnv.OMNIROUTE_MEMORY_MB);
-warnConflictingHeapLimits(childEnv, maxOldSpaceMb);
-childEnv.NODE_OPTIONS = buildStandaloneNodeOptions(childEnv, maxOldSpaceMb);
+// (#5238). Otherwise derive a cgroup/process-aware fallback before the actual
+// server Node process starts. Warn when both explicit knobs disagree.
+const heapConfiguration = resolveStandaloneHeapConfiguration(childEnv);
+warnConflictingHeapLimits(childEnv, heapConfiguration.maxOldSpaceMb);
+childEnv.NODE_OPTIONS = heapConfiguration.nodeOptions;
 
 // Prefer the WS-aware wrapper (server-ws.mjs) over the bare Next standalone
 // server.js: it installs the trusted peer-IP stamp (scripts/dev/peer-stamp.mjs)

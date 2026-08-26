@@ -217,14 +217,10 @@ LABEL org.opencontainers.image.title="omniroute" \
 ENV NODE_ENV=production
 ENV PORT=20128
 ENV HOSTNAME=0.0.0.0
-# Runtime heap ceiling. 1024MB is enough for normal traffic but can be tight
-# for large fusion-combo panels (many models fanned out in parallel, each
-# response buffered in full — see open-sse/services/fusion.ts::FUSION_DEFAULTS
-# .maxPanel, issue #1905). Override at `docker run` time with
-# `-e OMNIROUTE_MEMORY_MB=2048` (or higher) if you raise fusionTuning.maxPanel
-# above the default cap.
-ENV OMNIROUTE_MEMORY_MB=1024
-ENV NODE_OPTIONS="--max-old-space-size=${OMNIROUTE_MEMORY_MB}"
+# The standalone launcher derives the runtime heap from the tightest current
+# host/cgroup/process-available budget before it starts the actual server Node
+# process. OMNIROUTE_MEMORY_MB and an operator-supplied NODE_OPTIONS heap retain
+# precedence; the image must not pin either knob and bypass that calibration.
 
 # Data directory inside Docker — must match the volume mount in docker-compose.yml
 ENV DATA_DIR=/app/data

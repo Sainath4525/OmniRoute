@@ -1,4 +1,207 @@
 import { spawn } from "node:child_process";
+import { readFileSync } from "node:fs";
+import { freemem, totalmem } from "node:os";
+import path from "node:path";
+import v8 from "node:v8";
+
+const DEFAULT_CGROUP_ROOT = "/sys/fs/cgroup";
+
+function defaultReadText(filePath) {
+  try {
+    return readFileSync(filePath, "utf8");
+  } catch {
+    return null;
+  }
+}
+
+/** Normalize a byte counter without accepting cgroup unlimited sentinels. */
+export function sanitizeRuntimeMemoryBytes(value, { allowZero = false } = {}) {
+  if (typeof value === "string") {
+    const trimmed = value.trim();
+    if (!trimmed || trimmed === "max" || !/^\d+$/.test(trimmed)) return null;
+    try {
+      const parsed = BigInt(trimmed);
+      if (parsed >= BigInt(Number.MAX_SAFE_INTEGER)) return null;
+      value = Number(parsed);
+    } catch {
+      return null;
+    }
+  }
+  if (
+    typeof value !== "number" ||
+    !Number.isSafeInteger(value) ||
+    value < 0 ||
+    value >= Number.MAX_SAFE_INTEGER
+  ) {
+    return null;
+  }
+  if (!allowZero && value === 0) return null;
+  return value;
+}
+
+function decodeMountPath(value) {
+  if (typeof value !== "string" || value.includes("\0")) return null;
+  return value.replace(/\\([0-7]{3})/g, (_match, octal) =>
+    String.fromCharCode(Number.parseInt(octal, 8))
+  );
+}
+
+function isContained(root, candidate) {
+  const relative = path.relative(root, candidate);
+  return relative === "" || (!relative.startsWith("..") && !path.isAbsolute(relative));
+}
+
+function resolveMountedCgroupPath(cgroupPath, mountRoot, mountPoint) {
+  const decodedRoot = decodeMountPath(mountRoot);
+  const decodedMount = decodeMountPath(mountPoint);
+  if (!decodedRoot?.startsWith("/") || !decodedMount?.startsWith("/")) return null;
+  if (!cgroupPath.startsWith("/") || cgroupPath.includes("\0")) return null;
+  if (cgroupPath.split("/").some((segment) => segment === "." || segment === "..")) return null;
+  const root = path.resolve(decodedRoot);
+  const group = path.resolve(cgroupPath);
+  if (!isContained(root, group)) return null;
+  const mount = path.resolve(decodedMount);
+  const candidate = path.resolve(mount, path.relative(root, group));
+  return isContained(mount, candidate) ? candidate : null;
+}
+
+function parseCgroupMembership(contents) {
+  const membership = { v2Path: null, v1MemoryPath: null };
+  if (!contents) return membership;
+  for (const rawLine of contents.split("\n")) {
+    const fields = rawLine.trim().split(":", 3);
+    if (fields.length !== 3 || !fields[2].startsWith("/")) continue;
+    if (fields[0] === "0" && fields[1] === "") membership.v2Path = fields[2];
+    if (fields[1].split(",").includes("memory")) membership.v1MemoryPath = fields[2];
+  }
+  return membership;
+}
+
+function parseCgroupMounts(contents) {
+  const mounts = { v2: null, v1Memory: null };
+  if (!contents) return mounts;
+  for (const rawLine of contents.split("\n")) {
+    const separator = rawLine.indexOf(" - ");
+    if (separator < 0) continue;
+    const left = rawLine.slice(0, separator).trim().split(/\s+/);
+    const right = rawLine
+      .slice(separator + 3)
+      .trim()
+      .split(/\s+/);
+    if (left.length < 5 || right.length < 3) continue;
+    const mount = { root: left[3], mountPoint: left[4] };
+    if (right[0] === "cgroup2") mounts.v2 = mount;
+    if (right[0] === "cgroup" && right.slice(1).join(",").split(",").includes("memory")) {
+      mounts.v1Memory = mount;
+    }
+  }
+  return mounts;
+}
+
+function readCgroupPair(readText, directory, limitName, usageName, highName = null) {
+  if (!directory) return null;
+  const limit = sanitizeRuntimeMemoryBytes(readText(path.join(directory, limitName)));
+  const usage = sanitizeRuntimeMemoryBytes(readText(path.join(directory, usageName)), {
+    allowZero: true,
+  });
+  if (limit === null || usage === null || usage > limit) return null;
+  const high = highName
+    ? sanitizeRuntimeMemoryBytes(readText(path.join(directory, highName)), { allowZero: true })
+    : null;
+  return { limitBytes: limit, usedBytes: usage, highBytes: high };
+}
+
+/**
+ * Resolve the current process's finite cgroup memory budget. Both cgroup v2 and
+ * the legacy v1 memory controller are supported; unlimited and contradictory
+ * pairs are deliberately absent rather than converted into fake capacity.
+ */
+export function sampleRuntimeCgroupMemory(readText = defaultReadText) {
+  const membership = parseCgroupMembership(readText("/proc/self/cgroup"));
+  const mounts = parseCgroupMounts(readText("/proc/self/mountinfo"));
+
+  if (membership.v2Path) {
+    const mounted = mounts.v2
+      ? resolveMountedCgroupPath(membership.v2Path, mounts.v2.root, mounts.v2.mountPoint)
+      : null;
+    const pair =
+      readCgroupPair(readText, mounted, "memory.max", "memory.current", "memory.high") ??
+      readCgroupPair(readText, DEFAULT_CGROUP_ROOT, "memory.max", "memory.current", "memory.high");
+    if (pair) return { version: "v2", ...pair };
+  }
+
+  if (membership.v1MemoryPath) {
+    const mounted = mounts.v1Memory
+      ? resolveMountedCgroupPath(
+          membership.v1MemoryPath,
+          mounts.v1Memory.root,
+          mounts.v1Memory.mountPoint
+        )
+      : null;
+    const fallback = path.join(
+      DEFAULT_CGROUP_ROOT,
+      "memory",
+      membership.v1MemoryPath.replace(/^\/+/, "")
+    );
+    const pair =
+      readCgroupPair(readText, mounted, "memory.limit_in_bytes", "memory.usage_in_bytes") ??
+      readCgroupPair(readText, fallback, "memory.limit_in_bytes", "memory.usage_in_bytes");
+    if (pair) return { version: "v1", ...pair };
+  }
+
+  return { version: null, limitBytes: null, usedBytes: null, highBytes: null };
+}
+
+function safeRuntimeCall(call, options) {
+  try {
+    return sanitizeRuntimeMemoryBytes(call?.(), options);
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * One repository-wide synchronous memory sample used both before the server is
+ * spawned and by structural admission after startup. Dependency injection keeps
+ * cgroup layouts and invalid/sentinel values deterministic in unit tests.
+ */
+export function sampleRuntimeMemorySignals(deps = {}) {
+  let memory = null;
+  let heap = null;
+  try {
+    memory = (deps.memoryUsage ?? (() => process.memoryUsage()))();
+  } catch {
+    // Individual process fields remain unavailable.
+  }
+  try {
+    heap = (deps.heapStatistics ?? (() => v8.getHeapStatistics()))();
+  } catch {
+    // Admission will identify unavailable critical V8 telemetry explicitly.
+  }
+  const cgroup = sampleRuntimeCgroupMemory(deps.readText ?? defaultReadText);
+
+  return {
+    heapLimitBytes: sanitizeRuntimeMemoryBytes(heap?.heap_size_limit),
+    heapUsedBytes: sanitizeRuntimeMemoryBytes(heap?.used_heap_size ?? memory?.heapUsed, {
+      allowZero: true,
+    }),
+    rssUsedBytes: sanitizeRuntimeMemoryBytes(memory?.rss, { allowZero: true }),
+    externalBytes: sanitizeRuntimeMemoryBytes(memory?.external, { allowZero: true }),
+    arrayBuffersBytes: sanitizeRuntimeMemoryBytes(memory?.arrayBuffers, { allowZero: true }),
+    processAvailableBytes: safeRuntimeCall(
+      deps.availableMemory ?? (() => process.availableMemory?.())
+    ),
+    processConstrainedBytes: safeRuntimeCall(
+      deps.constrainedMemory ?? (() => process.constrainedMemory?.())
+    ),
+    hostTotalBytes: safeRuntimeCall(deps.hostTotalMemory ?? totalmem),
+    hostFreeBytes: safeRuntimeCall(deps.hostFreeMemory ?? freemem, { allowZero: true }),
+    cgroupVersion: cgroup.version,
+    cgroupLimitBytes: cgroup.limitBytes,
+    cgroupUsedBytes: cgroup.usedBytes,
+    cgroupHighBytes: cgroup.highBytes,
+  };
+}
 
 export function parsePort(value, fallback) {
   const parsed = Number.parseInt(String(value), 10);
@@ -20,20 +223,75 @@ export function resolveMaxOldSpaceMb(value, fallback = 512) {
 }
 
 /**
- * Derive a sane DEFAULT V8 heap ceiling (MB) from the host's physical RAM, used
- * when `OMNIROUTE_MEMORY_MB` is unset. A fixed 512MB default crashed boxes with
- * plenty of RAM under load (65 providers / 2600 models → "Ineffective
- * mark-compacts near heap limit ~500MB"); see #5172 / #5160 / #5152. Targets
- * ~35% of total RAM, clamped to [512, 4096]. Invalid/zero totalmem → 512.
- * Pass the result as the `fallback` of {@link resolveMaxOldSpaceMb} so an
- * explicit OMNIROUTE_MEMORY_MB override always wins.
+ * Derive the default V8 heap ceiling from the most restrictive trustworthy
+ * startup budget: host total, cgroup/process constraint, and current
+ * process-available memory plus the launcher's RSS. The latter keeps a busy
+ * unconstrained host from sizing from installed RAM that is not actually free.
+ *
+ * The result retains the existing OMNIROUTE_MEMORY_MB contract ([64, 16384])
+ * and targets 35% of the effective budget, leaving most memory for native
+ * buffers, SQLite, sibling processes, and the OS. We intentionally keep using
+ * the existing absolute `--max-old-space-size` launcher path rather than add
+ * Node's percentage flag as a second memory-control system.
+ *
  * @param {number | undefined | null} totalmemBytes — typically `os.totalmem()`
+ * @param {{
+ *   constrainedMemoryBytes?: number | undefined | null,
+ *   availableMemoryBytes?: number | undefined | null,
+ *   rssBytes?: number | undefined | null
+ * }} [runtimeSignals]
  */
-export function calibrateHeapFallbackMb(totalmemBytes) {
-  const totalMb = Number(totalmemBytes) / (1024 * 1024);
-  if (!Number.isFinite(totalMb) || totalMb <= 0) return 512;
-  const target = Math.floor(totalMb * 0.35);
-  return Math.min(4096, Math.max(512, target));
+export function calibrateHeapFallbackMb(totalmemBytes, runtimeSignals = {}) {
+  const budgets = [];
+  const addBudget = (value) => {
+    const numeric = sanitizeRuntimeMemoryBytes(value);
+    if (numeric !== null) budgets.push(numeric);
+  };
+
+  addBudget(totalmemBytes);
+  addBudget(runtimeSignals.constrainedMemoryBytes);
+  addBudget(runtimeSignals.processConstrainedBytes);
+  addBudget(runtimeSignals.cgroupLimitBytes);
+
+  const available = sanitizeRuntimeMemoryBytes(
+    runtimeSignals.availableMemoryBytes ?? runtimeSignals.processAvailableBytes,
+    { allowZero: true }
+  );
+  const rss = sanitizeRuntimeMemoryBytes(runtimeSignals.rssBytes ?? runtimeSignals.rssUsedBytes, {
+    allowZero: true,
+  });
+  if (available !== null) {
+    const processBudget =
+      rss !== null && available <= Number.MAX_SAFE_INTEGER - rss ? available + rss : available;
+    addBudget(processBudget);
+  }
+
+  const hostFree = sanitizeRuntimeMemoryBytes(runtimeSignals.hostFreeBytes, { allowZero: true });
+  if (hostFree !== null) {
+    const hostAvailableBudget =
+      rss !== null && hostFree <= Number.MAX_SAFE_INTEGER - rss ? hostFree + rss : hostFree;
+    addBudget(hostAvailableBudget);
+  }
+
+  if (budgets.length === 0) return 512;
+  const effectiveMb = Math.min(...budgets) / (1024 * 1024);
+  const target = Math.floor(effectiveMb * 0.35);
+  return Math.min(16384, Math.max(64, target));
+}
+
+/** Read Node's cgroup/process-aware startup signals without making them mandatory. */
+export function sampleRuntimeHeapCalibrationSignals(runtimeProcess = process) {
+  const sampled = sampleRuntimeMemorySignals({
+    constrainedMemory: () => runtimeProcess.constrainedMemory?.(),
+    availableMemory: () => runtimeProcess.availableMemory?.(),
+    memoryUsage: () => runtimeProcess.memoryUsage(),
+  });
+  return {
+    constrainedMemoryBytes: sampled.processConstrainedBytes,
+    availableMemoryBytes: sampled.processAvailableBytes,
+    rssBytes: sampled.rssUsedBytes,
+    ...sampled,
+  };
 }
 
 const MAX_OLD_SPACE_FLAG = "--max-old-space-size";
@@ -100,6 +358,32 @@ export function buildStandaloneNodeOptions(env = process.env, omnirouteMb) {
   }
   if (existing.includes(MAX_OLD_SPACE_FLAG)) return existing;
   return `${existing} ${MAX_OLD_SPACE_FLAG}=${omnirouteMb}`.trim();
+}
+
+/**
+ * Resolve the official standalone/Docker child heap before Node starts.
+ * `OMNIROUTE_MEMORY_MB` retains the existing highest precedence in this
+ * launcher; otherwise a documented NODE_OPTIONS heap is preserved; automatic
+ * mode uses the validated host/process/cgroup sample.
+ */
+export function resolveStandaloneHeapConfiguration(env = process.env, runtimeSignals = null) {
+  const signals = runtimeSignals ?? sampleRuntimeMemorySignals();
+  const automaticMb = calibrateHeapFallbackMb(signals.hostTotalBytes, signals);
+  const explicitOmniroute = envHasExplicitOmnirouteMemoryMb(env);
+  const explicitNodeMb = parseNodeOptionsHeapMb(env?.NODE_OPTIONS);
+  const maxOldSpaceMb = explicitOmniroute
+    ? resolveMaxOldSpaceMb(env.OMNIROUTE_MEMORY_MB, automaticMb)
+    : (explicitNodeMb ?? automaticMb);
+  return {
+    maxOldSpaceMb,
+    nodeOptions: buildStandaloneNodeOptions(env, maxOldSpaceMb),
+    source: explicitOmniroute
+      ? "omniroute_memory_mb"
+      : explicitNodeMb !== null
+        ? "node_options"
+        : "automatic",
+    signals,
+  };
 }
 
 /**

@@ -19,6 +19,16 @@ export type ChatAdmissionSnapshot = ReturnType<PerConnectionAdmissionController[
 export type ChatAdmissionHealthSummary = {
   activeHeavy: number;
   activeHealthyHeadroom: number;
+  activeHeavyTotal: number;
+  configuredHealthyHeadroom: number | null;
+  effectiveHealthyHeadroom: number;
+  calculatedTotalHeavyCapacity: number;
+  availableHeavySlots: number;
+  memorySafeTotalHeavyCapacity: number;
+  healthyHeadroomReason: ChatAdmissionSnapshot["healthyHeadroomReason"];
+  healthyHeadroomLimitingBudget: ChatAdmissionSnapshot["healthyHeadroomLimitingBudget"];
+  telemetryAvailability: ChatAdmissionSnapshot["telemetryAvailability"];
+  consideredMemoryBudgets: ChatAdmissionSnapshot["consideredMemoryBudgets"];
   waiting: number;
   queuedBytes: number;
   shedTotal: number;
@@ -37,6 +47,23 @@ export function projectChatAdmissionSummary(
   return {
     activeHeavy: snapshot.activeHeavy,
     activeHealthyHeadroom: snapshot.activeHealthyHeadroom,
+    activeHeavyTotal: snapshot.activeHeavyTotal,
+    configuredHealthyHeadroom: snapshot.configuredHealthyHeadroom,
+    effectiveHealthyHeadroom: snapshot.effectiveHealthyHeadroom,
+    calculatedTotalHeavyCapacity: snapshot.calculatedTotalHeavyCapacity,
+    availableHeavySlots: snapshot.availableHeavySlots,
+    memorySafeTotalHeavyCapacity: snapshot.memorySafeTotalHeavyCapacity,
+    healthyHeadroomReason: snapshot.healthyHeadroomReason,
+    healthyHeadroomLimitingBudget: snapshot.healthyHeadroomLimitingBudget,
+    telemetryAvailability: snapshot.telemetryAvailability,
+    consideredMemoryBudgets: (snapshot.consideredMemoryBudgets ?? []).map((budget) => ({
+      name: budget.name,
+      limitBytes: budget.limitBytes,
+      usedBytes: budget.usedBytes,
+      reserveBytes: budget.reserveBytes,
+      availableBytes: budget.availableBytes,
+      capacity: budget.capacity,
+    })),
     waiting: snapshot.waiting,
     queuedBytes: snapshot.queuedBytes,
     shedTotal: snapshot.shedTotal,
@@ -53,6 +80,10 @@ export type AdaptiveAdmissionHealthSummary = {
   maxLimit: number;
   activeCost: number;
   activeCount: number;
+  preparingCost: number;
+  preparingCount: number;
+  generatingCost: number;
+  generatingCount: number;
   queuedCost: number;
   queuedCount: number;
   admittedCount: number;
@@ -84,6 +115,10 @@ export function projectAdaptiveAdmissionSummary(
     maxLimit: snapshot.maxLimit,
     activeCost: snapshot.activeCost,
     activeCount: snapshot.activeCount,
+    preparingCost: snapshot.preparingCost,
+    preparingCount: snapshot.preparingCount,
+    generatingCost: snapshot.generatingCost,
+    generatingCount: snapshot.generatingCount,
     queuedCost: snapshot.queuedCost,
     queuedCount: snapshot.queuedCount,
     admittedCount: snapshot.admittedCount,

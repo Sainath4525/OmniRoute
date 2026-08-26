@@ -16,6 +16,7 @@ import { resolveServerHost, resolveExposureWarning } from "../utils/serverHost.m
 import {
   resolveMaxOldSpaceMb,
   calibrateHeapFallbackMb,
+  sampleRuntimeHeapCalibrationSignals,
   buildServerNodeOptions,
   buildNodeHeapArgs,
 } from "../../../scripts/build/runtime-env.mjs";
@@ -228,12 +229,12 @@ export async function runServe(opts = {}) {
 
   console.log(`  \x1b[2m⏳ Starting server...\x1b[0m\n`);
 
-  // #5172/#5160/#5152: default the V8 heap to ~35% of physical RAM (clamped
-  // [512, 4096]) instead of a fixed 512MB, which OOM-crashed boxes with plenty
-  // of RAM under load. An explicit OMNIROUTE_MEMORY_MB still wins.
+  // #5172/#5160/#5152: derive the V8 heap from the tightest host, process, and
+  // cgroup-aware startup budget instead of a fixed 512MB. The result retains
+  // the OMNIROUTE_MEMORY_MB [64, 16384] contract and explicit override.
   const memoryLimit = resolveMaxOldSpaceMb(
     process.env.OMNIROUTE_MEMORY_MB,
-    calibrateHeapFallbackMb(totalmem())
+    calibrateHeapFallbackMb(totalmem(), sampleRuntimeHeapCalibrationSignals())
   );
 
   // #5242: opt-in native HTTPS. CLI flags take precedence over env; the child
@@ -423,7 +424,9 @@ async function runWithSupervisor(
       if (detectMitmCrash(crashLog)) {
         try {
           const PROJECT_ROOT = join(dirname(fileURLToPath(import.meta.url)), "..", "..", "..");
-          const { updateSettings } = await import(pathToFileURL(join(PROJECT_ROOT, "src/lib/db/settings.ts")).href);
+          const { updateSettings } = await import(
+            pathToFileURL(join(PROJECT_ROOT, "src/lib/db/settings.ts")).href
+          );
           updateSettings({ mitmEnabled: false });
         } catch {}
         return "disable-mitm-and-retry";

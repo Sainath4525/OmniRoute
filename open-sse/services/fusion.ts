@@ -30,9 +30,10 @@ export const FUSION_DEFAULTS = {
   panelHardTimeoutMs: 90000, // absolute cap so one hung model can't stall forever
   // Hard cap on panel size (issue #1905). Every panel member is fanned out in
   // parallel and its full response text buffered in memory simultaneously —
-  // with the runtime heap capped (Dockerfile OMNIROUTE_MEMORY_MB, default
-  // 1024MB), a large panel (reported: ~73 models) with sizable concurrent
-  // responses can exceed the heap ceiling and OOM-crash the whole process.
+  // with a bounded runtime heap, a large panel (reported: ~73 models) with
+  // sizable concurrent responses can exceed the heap ceiling and OOM-crash the
+  // whole process. Docker derives the default heap at startup, while an explicit
+  // OMNIROUTE_MEMORY_MB still overrides it.
   // Reject oversized panels up front with a clean 400 instead.
   maxPanel: 40,
 } as const;

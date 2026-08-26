@@ -238,6 +238,10 @@ test("buildHealthPayload projects allowlisted adaptiveAdmission aggregates only"
     maxLimit: 8,
     activeCost: 2,
     activeCount: 1,
+    preparingCost: 1,
+    preparingCount: 1,
+    generatingCost: 1,
+    generatingCount: 1,
     queuedCost: 3,
     queuedCount: 1,
     virtualActiveCost: 99,
@@ -306,6 +310,10 @@ test("buildHealthPayload projects allowlisted adaptiveAdmission aggregates only"
     maxLimit: 8,
     activeCost: 2,
     activeCount: 1,
+    preparingCost: 1,
+    preparingCount: 1,
+    generatingCost: 1,
+    generatingCount: 1,
     queuedCost: 3,
     queuedCount: 1,
     admittedCount: 10,
@@ -345,6 +353,25 @@ test("buildHealthPayload projects allowlisted structural chatAdmission fields on
   const snapshot = {
     activeHeavy: 1,
     activeHealthyHeadroom: 1,
+    activeHeavyTotal: 2,
+    configuredHealthyHeadroom: null,
+    effectiveHealthyHeadroom: 4,
+    calculatedTotalHeavyCapacity: 5,
+    availableHeavySlots: 3,
+    memorySafeTotalHeavyCapacity: 6,
+    healthyHeadroomReason: "v8_heap_capacity",
+    healthyHeadroomLimitingBudget: "v8_heap",
+    telemetryAvailability: "available",
+    consideredMemoryBudgets: [
+      {
+        name: "v8_heap",
+        limitBytes: 8_589_934_592,
+        usedBytes: 536_870_912,
+        reserveBytes: 536_870_912,
+        availableBytes: 5_368_709_120,
+        capacity: 5,
+      },
+    ],
     waiting: 2,
     queuedBytes: 524_288,
     shedTotal: 3,
@@ -356,6 +383,8 @@ test("buildHealthPayload projects allowlisted structural chatAdmission fields on
     // Extra keys that must never leak into the public payload.
     internalController: { secret: "controller-state" },
     rawAuthorization: "Bearer raw-SHOULD-NOT-LEAK",
+    heapLimitBytes: 4_294_967_296,
+    rawCgroupPath: "/sys/fs/cgroup/private-tenant.slice",
   } as unknown as import("../../src/lib/monitoring/observability.ts").ChatAdmissionSnapshot;
 
   const payload = buildHealthPayload({
@@ -384,6 +413,25 @@ test("buildHealthPayload projects allowlisted structural chatAdmission fields on
   assert.deepEqual(payload.chatAdmission, {
     activeHeavy: 1,
     activeHealthyHeadroom: 1,
+    activeHeavyTotal: 2,
+    configuredHealthyHeadroom: null,
+    effectiveHealthyHeadroom: 4,
+    calculatedTotalHeavyCapacity: 5,
+    availableHeavySlots: 3,
+    memorySafeTotalHeavyCapacity: 6,
+    healthyHeadroomReason: "v8_heap_capacity",
+    healthyHeadroomLimitingBudget: "v8_heap",
+    telemetryAvailability: "available",
+    consideredMemoryBudgets: [
+      {
+        name: "v8_heap",
+        limitBytes: 8_589_934_592,
+        usedBytes: 536_870_912,
+        reserveBytes: 536_870_912,
+        availableBytes: 5_368_709_120,
+        capacity: 5,
+      },
+    ],
     waiting: 2,
     queuedBytes: 524_288,
     shedTotal: 3,
@@ -400,6 +448,8 @@ test("buildHealthPayload projects allowlisted structural chatAdmission fields on
   assert.equal(json.includes("controller-state"), false);
   assert.equal(json.includes("raw-SHOULD-NOT-LEAK"), false);
   assert.equal(json.includes("internalController"), false);
+  assert.equal(json.includes("4294967296"), false);
+  assert.equal(json.includes("private-tenant.slice"), false);
 
   // Absent / null snapshot projects to null (degraded path parity).
   assert.equal(projectChatAdmissionSummary(null), null);

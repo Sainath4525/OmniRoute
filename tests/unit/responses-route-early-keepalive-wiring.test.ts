@@ -29,7 +29,7 @@ test("Responses route wires dual-cadence neutral keepalives", () => {
   assert.doesNotMatch(routeSource, /RESPONSES_STARTUP_THINKING_FRAME/);
 });
 
-test("Responses route applies heavyweight admission through the SSE lifecycle", () => {
+test("Responses route hands structural preparation to the adaptive SSE lifecycle", () => {
   assert.match(routeSource, /admitChatRequest\(request,/);
   assert.match(routeSource, /admitChatStructure\(parsedBody, admission\.lease,/);
   assert.match(routeSource, /releaseChatAdmissionAfterHandler\(/);

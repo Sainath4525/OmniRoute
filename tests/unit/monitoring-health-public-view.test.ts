@@ -45,4 +45,11 @@ test("management session sees the full health payload", async () => {
     Object.keys(body).length > 2,
     "a management caller must still receive the detailed payload"
   );
+  const chatAdmission = body.chatAdmission as Record<string, unknown>;
+  assert.ok(chatAdmission, "management health must expose structural admission");
+  assert.ok("calculatedTotalHeavyCapacity" in chatAdmission);
+  assert.ok("availableHeavySlots" in chatAdmission);
+  assert.ok("telemetryAvailability" in chatAdmission);
+  assert.ok("healthyHeadroomLimitingBudget" in chatAdmission);
+  assert.ok(Array.isArray(chatAdmission.consideredMemoryBudgets));
 });
