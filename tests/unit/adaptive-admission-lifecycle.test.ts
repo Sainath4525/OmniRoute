@@ -20,11 +20,23 @@ import type {
 function createSpyLease(id = "spy-lease", cost = 1) {
   const calls: Array<{ outcome?: AdmissionReleaseOutcome; meta?: AdmissionReleaseMeta }> = [];
   let released = false;
+  let phase: "preparation" | "generation" = "preparation";
+  let currentCost = cost;
   const lease: AdmissionLease = {
     id,
     cost,
+    get currentCost() {
+      return currentCost;
+    },
+    get phase() {
+      return phase;
+    },
     get released() {
       return released;
+    },
+    transitionToGeneration() {
+      phase = "generation";
+      currentCost = Math.min(currentCost, 1);
     },
     release(outcome?: AdmissionReleaseOutcome, meta?: AdmissionReleaseMeta) {
       calls.push({ outcome, meta });
@@ -332,6 +344,8 @@ describe("response lifecycle helpers", () => {
       { admittedAtMs: 100, nowMs: clock.now }
     );
     assert.equal(spy.releaseCount, 0);
+    assert.equal(spy.lease.phase, "generation");
+    assert.equal(spy.lease.currentCost, 1);
     assert.equal(wrapped.status, 200);
     assert.equal(wrapped.statusText, "OK");
     assert.equal(wrapped.headers.get("Content-Type"), "text/event-stream");

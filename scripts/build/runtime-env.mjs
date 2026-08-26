@@ -106,7 +106,7 @@ function readCgroupPair(readText, directory, limitName, usageName, highName = nu
   });
   if (limit === null || usage === null || usage > limit) return null;
   const high = highName
-    ? sanitizeRuntimeMemoryBytes(readText(path.join(directory, highName)))
+    ? sanitizeRuntimeMemoryBytes(readText(path.join(directory, highName)), { allowZero: true })
     : null;
   return { limitBytes: limit, usedBytes: usage, highBytes: high };
 }

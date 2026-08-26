@@ -284,7 +284,12 @@ Memory behavior in Docker:
 
 ### Runtime RAM for coding agents
 
-The 1 GiB Docker default is a dashboard/light-chat floor, not a production size. Long `POST /v1/responses` bodies (hundreds of messages, tens of tools) retain multiple in-memory graphs during compression. Two overlapping ~3 MiB / ~750k-token requests have aborted V8 at a **12 GiB** old-space (`FATAL ERROR: Reached heap limit`) and also hit a 16 GiB cgroup OOM. See [#7849](https://github.com/diegosouzapw/OmniRoute/issues/7849).
+The former fixed 1 GiB Docker heap was a dashboard/light-chat floor, not a production
+size. Long `POST /v1/responses` bodies (hundreds of messages, tens of tools) retain
+multiple in-memory graphs during compression. Two overlapping ~3 MiB / ~750k-token
+requests have aborted V8 at a **12 GiB** old-space (`FATAL ERROR: Reached heap limit`)
+and also hit a 16 GiB cgroup OOM. See
+[#7849](https://github.com/diegosouzapw/OmniRoute/issues/7849).
 
 Size **cgroup `--memory` above the heap** — native buffers, SQLite, and compression intermediates sit outside V8.
 
@@ -569,7 +574,12 @@ spec:
             periodSeconds: 20
 ```
 
-`preStop` sleep lets kube drop Service endpoints before SIGTERM so **new** traffic stops hitting the dying process. In-flight `/v1/responses` SSE is drained up to `SHUTDOWN_TIMEOUT_MS` (default 30s) via heavyweight admission leases (#11015). New requests that still reach the process get `503` + `Retry-After: 5`. The Recreate empty-endpoint gap until the replacement is Ready remains a hard outage — that is the SQLite topology, not a probe misconfig.
+`preStop` sleep lets kube drop Service endpoints before SIGTERM so **new** traffic stops
+hitting the dying process. Structural heavyweight leases now cover request preparation,
+not the full SSE lifetime; adaptive response lifecycle and #11493's provider semaphore
+own generation release and cancellation. New requests that still reach the process get
+`503` + `Retry-After: 5`. The Recreate empty-endpoint gap until the replacement is Ready
+remains a hard outage — that is the SQLite topology, not a probe misconfig.
 
 External Postgres / multi-writer HA is **not** a documented stock path. If you need HA, keep a single replica or run a topology the project has tested and documented separately. The Postgres/MySQL work lives in [#8075](https://github.com/diegosouzapw/OmniRoute/issues/8075). Until that ships, the only supported way to multiply **large** `/v1/responses` capacity is N independent processes (next section), not `replicas > 1` on one volume.
 

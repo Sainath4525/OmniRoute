@@ -458,6 +458,12 @@ class AdaptiveAdmissionRuntimeImpl implements AdaptiveAdmissionRuntime {
       return response;
     }
 
+    // Request parsing, policy, translation, and upstream-response preparation have
+    // completed. Keep only the configured lightweight streaming class in the
+    // weighted controller while #11493's hierarchical semaphore remains the
+    // generation-concurrency authority until the stream drains or is cancelled.
+    lease.transitionToGeneration();
+
     const upstream = response.body;
     const reader = upstream.getReader();
     let settled = false;

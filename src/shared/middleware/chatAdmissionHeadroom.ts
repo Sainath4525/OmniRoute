@@ -383,12 +383,16 @@ export function deriveRuntimeHeavyCapacity(
     name: Exclude<RuntimeMemoryBudgetName, "eligible_supply">,
     limitBytes: number,
     usedBytes: number,
-    rawAvailableBytes: number
+    rawAvailableBytes: number,
+    budgetOptions: { allowZeroLimit?: boolean; allowUsageAboveLimit?: boolean } = {}
   ): void => {
+    const validLimit = budgetOptions.allowZeroLimit
+      ? isNonNegativeSafeInteger(limitBytes)
+      : isPositiveSafeInteger(limitBytes);
     if (
-      !isPositiveSafeInteger(limitBytes) ||
+      !validLimit ||
       !isNonNegativeSafeInteger(usedBytes) ||
-      usedBytes > limitBytes ||
+      (!budgetOptions.allowUsageAboveLimit && usedBytes > limitBytes) ||
       !Number.isFinite(rawAvailableBytes)
     ) {
       optionalInvalid = true;
@@ -466,7 +470,7 @@ export function deriveRuntimeHeavyCapacity(
       Math.floor(limit * input.shedRatio) - used - reserve
     );
 
-    const highState = classifyByteTelemetry(input.cgroupHighBytes, false);
+    const highState = classifyByteTelemetry(input.cgroupHighBytes, true);
     if (input.cgroupVersion === "v2" && highState === "valid") {
       const high = input.cgroupHighBytes as number;
       if (high <= limit) {
@@ -474,7 +478,8 @@ export function deriveRuntimeHeavyCapacity(
           "cgroup_v2_high",
           high,
           used,
-          Math.floor(high * input.shedRatio) - used - reserve
+          Math.floor(high * input.shedRatio) - used - reserve,
+          { allowZeroLimit: true, allowUsageAboveLimit: true }
         );
       } else {
         optionalInvalid = true;

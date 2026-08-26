@@ -128,6 +128,7 @@ test("cgroup v2 discovery pairs the real container limit and current usage", () 
     ],
     ["/sys/fs/cgroup/docker/abc/memory.max", String(3 * GiB)],
     ["/sys/fs/cgroup/docker/abc/memory.current", String(768 * MiB)],
+    ["/sys/fs/cgroup/docker/abc/memory.high", String(2 * GiB)],
   ]);
   const sample = sampleRuntimeMemoryTelemetry({
     readText: (filePath) => files.get(filePath) ?? null,
@@ -148,6 +149,36 @@ test("cgroup v2 discovery pairs the real container limit and current usage", () 
   assert.equal(sample.cgroupVersion, "v2");
   assert.equal(sample.cgroupLimitBytes, 3 * GiB);
   assert.equal(sample.cgroupUsedBytes, 768 * MiB);
+  assert.equal(sample.cgroupHighBytes, 2 * GiB);
+  const capacity = deriveRuntimeHeavyCapacity(input(sample));
+  assert.ok(capacity.consideredBudgets.some((budget) => budget.name === "cgroup_v2_high"));
+});
+
+test("cgroup v2 memory.high contracts headroom while usage is above the soft throttle", () => {
+  const capacity = deriveRuntimeHeavyCapacity(
+    input(
+      profile({
+        heapLimitBytes: 16 * GiB,
+        processAvailableBytes: 12 * GiB,
+        processConstrainedBytes: 16 * GiB,
+        hostTotalBytes: 32 * GiB,
+        hostFreeBytes: 24 * GiB,
+        cgroupVersion: "v2",
+        cgroupLimitBytes: 8 * GiB,
+        cgroupUsedBytes: 3 * GiB,
+        cgroupHighBytes: 2 * GiB,
+      })
+    )
+  );
+
+  assert.equal(capacity.totalCapacity, 1);
+  assert.equal(capacity.memorySafeHeadroom, 0);
+  assert.equal(capacity.limitingBudget, "cgroup_v2_high");
+  assert.equal(capacity.reason, "cgroup_v2_high_pressure");
+  assert.equal(
+    capacity.consideredBudgets.find((budget) => budget.name === "cgroup_v2_high")?.availableBytes,
+    0
+  );
 });
 
 test("cgroup v1 discovery resolves the memory controller mount and usage", () => {
@@ -209,6 +240,64 @@ test("unlimited cgroups and Node sentinels do not become finite budgets", () => 
   assert.equal(sample.cgroupUsedBytes, null);
   assert.equal(sample.processConstrainedBytes, null);
   assert.ok(deriveRuntimeHeavyCapacity(input(sample)).memorySafeHeadroom > 0);
+});
+
+test("the cgroup v1 unlimited sentinel is not treated as a host-sized container budget", () => {
+  const files = new Map<string, string>([
+    ["/proc/self/cgroup", "5:memory:/docker/legacy\n"],
+    ["/proc/self/mountinfo", "31 23 0:27 / /sys/fs/cgroup/memory rw - cgroup cgroup rw,memory\n"],
+    ["/sys/fs/cgroup/memory/docker/legacy/memory.limit_in_bytes", "9223372036854771712\n"],
+    ["/sys/fs/cgroup/memory/docker/legacy/memory.usage_in_bytes", String(512 * MiB)],
+  ]);
+  const sample = sampleRuntimeMemoryTelemetry({
+    readText: (filePath) => files.get(filePath) ?? null,
+    heapStatistics: () => ({ heap_size_limit: 8 * GiB, used_heap_size: 512 * MiB }),
+    memoryUsage: () => ({
+      rss: 768 * MiB,
+      heapTotal: 640 * MiB,
+      heapUsed: 512 * MiB,
+      external: 128 * MiB,
+      arrayBuffers: 64 * MiB,
+    }),
+    availableMemory: () => 12 * GiB,
+    constrainedMemory: () => undefined,
+    hostTotalMemory: () => 16 * GiB,
+    hostFreeMemory: () => 12 * GiB,
+  });
+
+  assert.equal(sample.cgroupVersion, null);
+  assert.equal(sample.cgroupLimitBytes, null);
+  assert.equal(sample.cgroupUsedBytes, null);
+});
+
+test("bare-metal Windows and macOS fall back to portable Node, V8, and host signals", () => {
+  const sample = sampleRuntimeMemoryTelemetry({
+    readText: () => null,
+    heapStatistics: () => ({ heap_size_limit: 4 * GiB, used_heap_size: 512 * MiB }),
+    memoryUsage: () => ({
+      rss: 768 * MiB,
+      heapTotal: 640 * MiB,
+      heapUsed: 512 * MiB,
+      external: 192 * MiB,
+      arrayBuffers: 128 * MiB,
+    }),
+    availableMemory: () => undefined,
+    constrainedMemory: () => undefined,
+    hostTotalMemory: () => 16 * GiB,
+    hostFreeMemory: () => 12 * GiB,
+  });
+
+  assert.equal(sample.cgroupVersion, null);
+  assert.equal(sample.cgroupLimitBytes, null);
+  assert.equal(sample.processAvailableBytes, null);
+  assert.equal(sample.processConstrainedBytes, null);
+  const capacity = deriveRuntimeHeavyCapacity(input(sample));
+  assert.equal(capacity.telemetryAvailability, "available");
+  assert.deepEqual(
+    capacity.consideredBudgets.map((budget) => budget.name),
+    ["v8_heap", "host_memory"]
+  );
+  assert.ok(capacity.memorySafeHeadroom > 0);
 });
 
 for (const version of ["v1", "v2"] as const) {

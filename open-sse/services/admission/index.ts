@@ -24,6 +24,7 @@ export {
   type AdmissionCostFeatures,
   type AdmissionLease,
   type AdmissionMode,
+  type AdmissionPhase,
   type AdmissionPressure,
   type AdmissionQueued,
   type AdmissionRejectCode,

@@ -80,6 +80,10 @@ export type AdaptiveAdmissionHealthSummary = {
   maxLimit: number;
   activeCost: number;
   activeCount: number;
+  preparingCost: number;
+  preparingCount: number;
+  generatingCost: number;
+  generatingCount: number;
   queuedCost: number;
   queuedCount: number;
   admittedCount: number;
@@ -111,6 +115,10 @@ export function projectAdaptiveAdmissionSummary(
     maxLimit: snapshot.maxLimit,
     activeCost: snapshot.activeCost,
     activeCount: snapshot.activeCount,
+    preparingCost: snapshot.preparingCost,
+    preparingCount: snapshot.preparingCount,
+    generatingCost: snapshot.generatingCost,
+    generatingCount: snapshot.generatingCount,
     queuedCost: snapshot.queuedCost,
     queuedCount: snapshot.queuedCount,
     admittedCount: snapshot.admittedCount,

@@ -1077,13 +1077,19 @@ export async function admitChatRequest(
   return { admit: true, request: rebuildRequest(request, body), lease };
 }
 
-/** Release a lease if a handler rejects; otherwise bind it to the returned response lifecycle. */
+/**
+ * Hold the structural lease only through request-side preparation. Once the
+ * handler yields a response, adaptive weighted admission and #11493's
+ * hierarchical provider semaphore own the generation lifecycle.
+ */
 export async function releaseChatAdmissionAfterHandler(
   responsePromise: Promise<Response>,
   lease: ChatAdmissionLease | null
 ): Promise<Response> {
   try {
-    return releaseChatAdmissionWhenDone(await responsePromise, lease);
+    const response = await responsePromise;
+    lease?.release();
+    return response;
   } catch (error) {
     lease?.release();
     throw error;

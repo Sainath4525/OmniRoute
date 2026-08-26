@@ -208,7 +208,8 @@ export async function POST(request) {
       const reqId = generateRequestId();
       // Wrap the real handler response, not the synthetic early-keepalive response. If the
       // client cancels while handleChat is still pending, earlyStreamKeepalive will cancel the
-      // eventual handler body; only that confirmed cleanup releases heavyweight capacity.
+      // eventual handler body. The structural preparation reservation ends when handleChat
+      // yields that response; adaptive admission and the provider semaphore retain generation.
       const handlerResponse = releaseChatAdmissionAfterHandler(
         handleChat(request, null, parsedBody, reqId),
         admission.lease
