@@ -1,0 +1,1 @@
+- **chore(lint):** prune two stale entries from `eslint-suppressions.json` so the bulk-suppression check stops exiting non-zero on every branch ([#11587](https://github.com/diegosouzapw/OmniRoute/pull/11587))
