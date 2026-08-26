@@ -1128,13 +1128,40 @@ function planLastUsedCommit(
   };
 }
 
-function materializeConnection(
+/**
+ * Resolve Proxy Pool references on a real connection row at the same boundary
+ * where credentials become request-ready. The synthetic no-auth fallback above
+ * already performs this hydration, but a persisted connection (for example the
+ * OpenCode card's `opencode` row selected through the `opencode-zen` alias)
+ * bypasses that fallback. Keep inline/legacy entries untouched and only incur a
+ * registry lookup when at least one by-id reference is present.
+ */
+async function hydrateAccountProxyReferences(
+  providerSpecificData: JsonRecord
+): Promise<JsonRecord> {
+  const entries = providerSpecificData.accountProxies;
+  if (!Array.isArray(entries)) return providerSpecificData;
+
+  const containsProxyReference = entries.some((entry) => {
+    if (!entry || typeof entry !== "object" || Array.isArray(entry)) return false;
+    const proxyId = (entry as Record<string, unknown>).proxyId;
+    return typeof proxyId === "string" && proxyId.trim().length > 0;
+  });
+  if (!containsProxyReference) return providerSpecificData;
+
+  return {
+    ...providerSpecificData,
+    accountProxies: await resolveAccountProxiesFromRegistry(entries),
+  };
+}
+
+async function materializeConnection(
   connection: ProviderConnectionView,
   options: CredentialSelectionOptions,
   extra: DeferredLeaseSelection & { exclusiveLease?: ExclusiveConnectionLease } = {}
 ) {
-  const apiKeyHealth = connection.providerSpecificData?.apiKeyHealth as
-    Record<string, KeyHealth> | undefined;
+  const providerSpecificData = await hydrateAccountProxyReferences(connection.providerSpecificData);
+  const apiKeyHealth = providerSpecificData.apiKeyHealth as Record<string, KeyHealth> | undefined;
   if (apiKeyHealth) syncHealthFromDB(connection.id, apiKeyHealth);
   const releaseOAuthSession =
     options.reserveOAuthSession === true && connection.authType === "oauth" && options.sessionKey
@@ -1148,10 +1175,10 @@ function materializeConnection(
     projectId: connection.projectId,
     defaultModel: connection.defaultModel || null,
     copilotToken:
-      typeof connection.providerSpecificData.copilotToken === "string"
-        ? connection.providerSpecificData.copilotToken
+      typeof providerSpecificData.copilotToken === "string"
+        ? providerSpecificData.copilotToken
         : null,
-    providerSpecificData: connection.providerSpecificData,
+    providerSpecificData,
     id: connection.id,
     provider: connection.provider,
     authType: connection.authType,
