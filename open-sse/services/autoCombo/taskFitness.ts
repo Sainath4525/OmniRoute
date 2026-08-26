@@ -10,7 +10,10 @@
  * 2b. Layers 1-2 retried against the base model this id inherits quality scores
  *     from, when `resolveScoresAs` resolves one (#11489). Reported as
  *     `<source>:inherited`.
- * 3. Models.dev tier — derived from `model_capabilities` table capability data
+ * 3. Models.dev tier — derived from `model_capabilities` table capability data,
+ *     with a vendor-lifecycle veto (#11508: a retired id never earns a tier
+ *     score) and the same base-model inheritance as layers 1–2
+ *     (`models_dev_tier:inherited`)
  * 4. Static FITNESS_TABLE — small hand-maintained table of VERSIONED model ids
  * 5. Wildcard boosts — pattern matching boosts over a neutral 0.5 baseline
  *
@@ -38,7 +41,36 @@ import {
   setUserFitnessOverrideEntry,
   deleteUserFitnessOverrideEntry,
 } from "../../../src/lib/db/modelIntelligence.ts";
+import { readFileSync } from "node:fs";
 import { resolveScoresAs } from "./scoresAs.ts";
+
+// #11508 — vendor lifecycle snapshot (#11507). An id the vendor has retired
+// must never earn a capability-derived tier score: models.dev keeps listing
+// retired models with their capabilities, so without this veto layer 3
+// recreates the ranking inversion that #11503 removed from layer 4.
+const LIFECYCLE_JSON_URL = new URL(
+  "../../../config/quality/model-lifecycle.json",
+  import.meta.url,
+);
+let _retiredModels: Set<string> | null = null;
+
+function loadRetiredModels(): Set<string> {
+  if (_retiredModels) return _retiredModels;
+  const retired = new Set<string>();
+  try {
+    const parsed = JSON.parse(readFileSync(LIFECYCLE_JSON_URL, "utf8")) as {
+      retired?: Record<string, { status?: string }>;
+    };
+    for (const [id, entry] of Object.entries(parsed.retired ?? {})) {
+      if (entry?.status === "retired") retired.add(id.toLowerCase());
+    }
+  } catch {
+    // Snapshot missing/unreadable → no lifecycle veto. Neutral by design:
+    // the file is a curated aid, and its absence must not disable routing.
+  }
+  _retiredModels = retired;
+  return retired;
+}
 
 const FITNESS_TABLE: Record<string, Record<string, number>> = {
   coding: {
@@ -202,6 +234,18 @@ function deriveTierFromCapabilities(cap: ModelCapRow): string {
   return "budget";
 }
 
+/**
+ * #11508: `model_capabilities` is keyed per (provider, model_id), and the same
+ * model id routinely appears under many providers with disagreeing capability
+ * columns (measured on a synced DB: 189 ids conflict on `reasoning`, 134 on
+ * `tool_call`, 528 on `limit_context`). The former last-write-wins loop made
+ * the surviving value depend on SQLite's undefined row order for the query, so
+ * a model's tier could silently flip between syncs.
+ *
+ * Aggregation rule (documented choice): booleans are capability-maximal — any
+ * non-null row asserting `true` wins; `limit_context` is the max across rows
+ * that carry one. Both are deterministic and independent of row order.
+ */
 function loadModelCapabilities(): Record<string, ModelCapRow> | null {
   if (_capabilitiesCache) return _capabilitiesCache;
 
@@ -213,26 +257,64 @@ function loadModelCapabilities(): Record<string, ModelCapRow> | null {
     if (!tableExists) return null;
 
     const rows = db.prepare("SELECT * FROM model_capabilities").all() as Record<string, unknown>[];
-    const cache: Record<string, ModelCapRow> = {};
+
+    interface CapAccumulator {
+      toolTrue: boolean;
+      toolSeen: boolean;
+      toolFalse: boolean;
+      reasonTrue: boolean;
+      reasonSeen: boolean;
+      reasonFalse: boolean;
+      maxContext: number | null;
+    }
+    const acc = new Map<string, CapAccumulator>();
 
     for (const row of rows) {
       const modelId = typeof row.model_id === "string" ? row.model_id : "";
       if (!modelId) continue;
 
-      cache[modelId.toLowerCase()] = {
-        tool_call:
-          row.tool_call === true || row.tool_call === 1
-            ? true
-            : row.tool_call === false || row.tool_call === 0
-              ? false
-              : null,
-        reasoning:
-          row.reasoning === true || row.reasoning === 1
-            ? true
-            : row.reasoning === false || row.reasoning === 0
-              ? false
-              : null,
-        limit_context: typeof row.limit_context === "number" ? row.limit_context : null,
+      let entry = acc.get(modelId.toLowerCase());
+      if (!entry) {
+        entry = {
+          toolTrue: false,
+          toolSeen: false,
+          toolFalse: false,
+          reasonTrue: false,
+          reasonSeen: false,
+          reasonFalse: false,
+          maxContext: null,
+        };
+        acc.set(modelId.toLowerCase(), entry);
+      }
+
+      if (row.tool_call === true || row.tool_call === 1) {
+        entry.toolTrue = true;
+        entry.toolSeen = true;
+      } else if (row.tool_call === false || row.tool_call === 0) {
+        entry.toolFalse = true;
+        entry.toolSeen = true;
+      }
+      if (row.reasoning === true || row.reasoning === 1) {
+        entry.reasonTrue = true;
+        entry.reasonSeen = true;
+      } else if (row.reasoning === false || row.reasoning === 0) {
+        entry.reasonFalse = true;
+        entry.reasonSeen = true;
+      }
+      if (typeof row.limit_context === "number") {
+        entry.maxContext =
+          entry.maxContext === null
+            ? row.limit_context
+            : Math.max(entry.maxContext, row.limit_context);
+      }
+    }
+
+    const cache: Record<string, ModelCapRow> = {};
+    for (const [modelId, a] of acc) {
+      cache[modelId] = {
+        tool_call: a.toolTrue ? true : a.toolFalse ? false : null,
+        reasoning: a.reasonTrue ? true : a.reasonFalse ? false : null,
+        limit_context: a.maxContext,
       };
     }
 
@@ -243,24 +325,61 @@ function loadModelCapabilities(): Record<string, ModelCapRow> | null {
   }
 }
 
-export function getModelsDevTierFitness(model: string, taskType: string): number | null {
+/** Test/ops hook: forces the next tier lookup to re-read `model_capabilities`. */
+export function invalidateCapabilitiesCache(): void {
+  _capabilitiesCache = null;
+}
+
+/**
+ * Layer 3 with lifecycle veto and variant inheritance (#11508).
+ *
+ * Source is `"models_dev_tier"`, or `"models_dev_tier:inherited"` when the
+ * score was resolved through the base model of an effort-suffix / `-free` /
+ * explicitly aliased variant id (#11492 wired the same indirection into
+ * layers 1–2 only; models.dev publishes base ids, so e.g. `gpt-5.6-sol-xhigh`
+ * used to fall to the wildcard while `gpt-5.6-sol` scored premium).
+ */
+export function getModelsDevTierFitnessWithSource(
+  model: string,
+  taskType: string
+): { score: number; source: string } | null {
   const normalizedModel = model.toLowerCase();
   const normalizedTask = taskType.toLowerCase();
 
+  // Lifecycle veto runs before every other signal in this layer: a retired id
+  // must fall through to the documented neutral baseline, never inherit a
+  // premium score from capabilities data that outlived the vendor's support.
+  if (loadRetiredModels().has(normalizedModel)) return null;
+
   const dbScore = queryModelIntelligence(normalizedModel, normalizedTask, "models_dev_tier");
-  if (dbScore !== null) return dbScore;
+  if (dbScore !== null) return { score: dbScore, source: "models_dev_tier" };
 
   const caps = loadModelCapabilities();
   if (!caps) return null;
 
-  const capRow = caps[normalizedModel];
+  let capRow = caps[normalizedModel];
+  let inheritedViaBase = false;
+  if (!capRow) {
+    const { base, via } = resolveScoresAs(normalizedModel);
+    if (via !== null && base !== normalizedModel) {
+      capRow = caps[base.toLowerCase()];
+      inheritedViaBase = capRow != null;
+    }
+  }
   if (!capRow) return null;
 
   const tier = deriveTierFromCapabilities(capRow);
   const tierScores = TIER_TASK_FITNESS[tier];
   if (!tierScores) return null;
 
-  return tierScores[normalizedTask] ?? tierScores.default ?? null;
+  const score = tierScores[normalizedTask] ?? tierScores.default ?? null;
+  if (score === null) return null;
+  return { score, source: inheritedViaBase ? "models_dev_tier:inherited" : "models_dev_tier" };
+}
+
+export function getModelsDevTierFitness(model: string, taskType: string): number | null {
+  const hit = getModelsDevTierFitnessWithSource(model, taskType);
+  return hit ? hit.score : null;
 }
 
 // ─── Resolution chain ───────────────────────────────────────────────────
@@ -375,9 +494,9 @@ export function getTaskFitnessWithSource(
     return inherited;
   }
 
-  const tierScore = getModelsDevTierFitness(normalizedModel, normalizedTask);
-  if (tierScore !== null) {
-    return { score: tierScore, source: "models_dev_tier" };
+  const tierHit = getModelsDevTierFitnessWithSource(normalizedModel, normalizedTask);
+  if (tierHit !== null) {
+    return tierHit;
   }
 
   const staticScore = lookupStaticFitnessTable(normalizedModel, normalizedTask);
