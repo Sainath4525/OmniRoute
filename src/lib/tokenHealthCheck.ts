@@ -128,9 +128,7 @@ function withExpiredRetry(
   return { ...psd, expiredRetry: { count, at } };
 }
 
-function withClearedExpiredRetry(
-  psd: Record<string, unknown>
-): Record<string, unknown> {
+function withClearedExpiredRetry(psd: Record<string, unknown>): Record<string, unknown> {
   const next = { ...psd };
   delete next.expiredRetry;
   return next;
@@ -592,6 +590,13 @@ export async function checkConnection(conn) {
   const isRecoverableExpiredWithRetryBudget =
     conn.testStatus === "expired" &&
     conn.lastErrorType !== "account_deactivated" &&
+    // GitHub access-token-only connections have their own dedicated exemption
+    // (isRecoverableGithubCopilotNoRefresh above): ONLY the exact
+    // "no_refresh_token" shape self-heals. An "expired" GitHub connection for a
+    // different reason (e.g. invalid_grant) is genuinely terminal and must stay
+    // skipped, otherwise the generic retry-budget exemption below reopens #8182's
+    // wasted-probe fix for every "expired" GitHub connection.
+    !isGitHubAccessTokenOnlyConnection(conn) &&
     getExpiredRetryCount(conn) < EXPIRED_RETRY_MAX;
   const terminalStatuses = new Set(["credits_exhausted", "banned", "expired"]);
   if (

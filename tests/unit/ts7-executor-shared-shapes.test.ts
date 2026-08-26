@@ -14,7 +14,7 @@ const { OpencodeExecutor } = await import("../../open-sse/executors/opencode.ts"
  * that failed to type-check — no duplicate added here.
  */
 
-describe("OpencodeExecutor — tools truncation survives the narrowing fix", () => {
+describe("OpencodeExecutor — tools array survives the narrowing fix (no truncation)", () => {
   const executor = new OpencodeExecutor("opencode-go");
   const CREDENTIALS = { apiKey: "k" } as Record<string, unknown>;
 
@@ -33,15 +33,17 @@ describe("OpencodeExecutor — tools truncation survives the narrowing fix", () 
     };
   }
 
-  it("truncates an over-long tools array to 128 entries", () => {
+  it("preserves an over-long tools array intact (no slice(0,128))", () => {
+    // #11444 removed the executor-level 128-tool truncation: tool-list limiting
+    // is chatCore's upstreamBody.truncateToolList() job, not the executor's.
     const out = executor.transformRequest("oc/kimi-k2.6", bodyWith(200), true, CREDENTIALS) as {
       tools: unknown[];
     };
-    assert.equal(out.tools.length, 128, "upstream rejects more than 128 tools");
+    assert.equal(out.tools.length, 200, "executor must not truncate the tools array");
     assert.deepEqual(
-      (out.tools[127] as { function: { name: string } }).function.name,
-      "tool_127",
-      "truncation keeps the first 128 in order, not an arbitrary slice"
+      (out.tools[199] as { function: { name: string } }).function.name,
+      "tool_199",
+      "the 200th tool (dropped by the old 128-cap) must still be present"
     );
   });
 
@@ -76,4 +78,3 @@ describe("OpencodeExecutor — tools truncation survives the narrowing fix", () 
     assert.equal((out as unknown[]).length, 1);
   });
 });
-

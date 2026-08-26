@@ -44,11 +44,21 @@ test("the alias target carries the real 1M window, not the 128k fallback", () =>
   assert.equal(MODEL_SPECS[BARE], undefined);
 });
 
-test("chatCore lifecycle resolution rewrites the model before dispatch", () => {
-  for (const provider of ["qwen-cloud-token-plan", "qoder", "bailian-coding-plan", "qwen-web"]) {
+test("chatCore lifecycle resolution rewrites the model only when the provider doesn't serve the bare id", () => {
+  // #10226 refreshed the Qwen catalogs: qwen-cloud-token-plan and qwen-web now serve
+  // the bare `qwen3.8-max` id directly, so the alias rewrite must be skipped for them
+  // (rewriting a served id into `-preview` would 404). qoder and bailian-coding-plan
+  // still ship only the `-preview` id, so the bare form is still forwarded there.
+  for (const provider of ["qoder", "bailian-coding-plan"]) {
     const [resolvedModel, effectiveModel, lifecycleError] = resolveLifecycle(provider, BARE);
     assert.equal(resolvedModel, CANONICAL, `resolvedModel for ${provider}`);
     assert.equal(effectiveModel, CANONICAL, `effectiveModel for ${provider}`);
+    assert.equal(lifecycleError, null, `unexpected lifecycle rejection for ${provider}`);
+  }
+  for (const provider of ["qwen-cloud-token-plan", "qwen-web"]) {
+    const [resolvedModel, effectiveModel, lifecycleError] = resolveLifecycle(provider, BARE);
+    assert.equal(resolvedModel, BARE, `resolvedModel for ${provider} (served as-is)`);
+    assert.equal(effectiveModel, BARE, `effectiveModel for ${provider} (served as-is)`);
     assert.equal(lifecycleError, null, `unexpected lifecycle rejection for ${provider}`);
   }
 });

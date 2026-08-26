@@ -130,7 +130,7 @@ test("combo dispatch registry (runtime import) covers the canonical strategy set
 test("extractExecutorAliases parses quoted and bare keys from the executors literal", () => {
   const src = [
     'import { Foo } from "./foo.ts";',
-    "const executors = {",
+    "const lazyExecutors: Record<string, () => Promise<BaseExecutor>> = {",
     "  antigravity: new Foo(),",
     "  agy: new Foo(), // Alias",
     '  "amazon-q": new Foo("amazon-q"),',

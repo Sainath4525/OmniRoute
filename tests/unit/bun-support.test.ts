@@ -27,14 +27,22 @@ test("createSyncDriverFactory prefers bun:sqlite built-in driver when running un
     (process.versions as Record<string, string>).bun = "1.1.20";
 
     const dummyBunDb = {
-      query: () => ({ run: () => ({ changes: 1, lastInsertRowid: 1 }), get: () => null, all: () => [] }),
+      query: () => ({
+        run: () => ({ changes: 1, lastInsertRowid: 1 }),
+        get: () => null,
+        all: () => [],
+      }),
       exec: () => {},
       close: () => {},
     };
 
     const loader = (modName: string) => {
       if (modName === "bun:sqlite") {
-        return { Database: function DummyBunDatabase() { return dummyBunDb; } };
+        return {
+          Database: function DummyBunDatabase() {
+            return dummyBunDb;
+          },
+        };
       }
       throw new Error(`Unexpected module ${modName}`);
     };
@@ -88,13 +96,20 @@ test("createSyncDriverFactory prefers better-sqlite3 when running under Node", (
   }
 });
 
-test("resolveNextBuildBundlerFlag automatically disables Turbopack and uses Webpack under Bun", async () => {
+test("resolveNextBuildBundlerFlag uses Turbopack by default under Bun 1.4+ and Webpack when explicitly disabled", async () => {
   const originalBun = process.versions.bun;
   try {
     (process.versions as Record<string, string>).bun = "1.1.20";
     const buildIsolated = await import("../../scripts/build/build-next-isolated.mjs");
-    assert.equal(buildIsolated.resolveNextBuildBundlerFlag({}), "--webpack");
-    assert.equal(buildIsolated.resolveNextBuildBundlerFlag({ OMNIROUTE_USE_TURBOPACK: "1" }), "--webpack");
+    assert.equal(buildIsolated.resolveNextBuildBundlerFlag({}), "--turbopack");
+    assert.equal(
+      buildIsolated.resolveNextBuildBundlerFlag({ OMNIROUTE_USE_TURBOPACK: "1" }),
+      "--turbopack"
+    );
+    assert.equal(
+      buildIsolated.resolveNextBuildBundlerFlag({ OMNIROUTE_USE_TURBOPACK: "0" }),
+      "--webpack"
+    );
   } finally {
     if (originalBun === undefined) {
       delete (process.versions as Record<string, string | undefined>).bun;
