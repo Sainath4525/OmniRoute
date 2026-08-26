@@ -127,6 +127,29 @@ export function caseInsensitiveToolNameLookup(
   return undefined;
 }
 
+/**
+ * Publish the per-request tool-name alias ledger on a translated request body.
+ *
+ * The map is a side channel for the response translator, never request payload.
+ * A `Map` has no JSON form, so an enumerable property would serialize into the
+ * upstream body as a bare `{}` and — worse — come back from the executor's
+ * `JSON.parse(JSON.stringify(body))` capture as `{}` rather than a `Map`,
+ * silently dropping every alias (#4091, #4307). Defining it non-enumerable
+ * keeps it off the wire and intact for `extractRequestToolIdentityMap`.
+ */
+export function attachToolNameMap(
+  target: JsonRecord,
+  aliases: ToolNameAliases | null | undefined
+): void {
+  if (!(aliases instanceof Map) || aliases.size === 0) return;
+  Object.defineProperty(target, "_toolNameMap", {
+    value: aliases,
+    enumerable: false,
+    configurable: true,
+    writable: true,
+  });
+}
+
 /** Restore normalized function names in OpenAI Chat Completions responses. */
 export function restoreOpenAIToolNames(body: unknown, aliases: unknown): boolean {
   if (!(aliases instanceof Map) || aliases.size === 0) return false;

@@ -585,9 +585,13 @@ test("OpenAI -> Antigravity wraps Gemini requests in a Cloud Code envelope", () 
     "model",
     "userAgent",
     "requestType",
-    // #9568: identity entries are emitted too (Gemini lowercases tool names in responses).
-    "_toolNameMap",
   ]);
+  // #9568: identity entries are emitted too (Gemini lowercases tool names in
+  // responses) — but as a NON-ENUMERABLE side channel. A `Map` has no JSON form,
+  // so an enumerable property would reach the executor's capture round trip as
+  // `{}` and lose every alias, leaving mangled tool names in the response.
+  assert.ok(!Object.keys(result).includes("_toolNameMap"));
+  assert.ok(!JSON.stringify(result).includes("_toolNameMap"));
   assert.equal((result._toolNameMap as Map<string, string>).get("weather"), "weather");
   assert.equal(result.userAgent, "antigravity");
   assert.equal(result.requestType, "agent");
@@ -866,7 +870,11 @@ test("OpenAI -> Antigravity maps Claude-family models to Gemini-compatible schem
   assert.match(result.requestId, /^agent\/\d+\/[0-9a-f]{8}$/);
   assert.equal(result.enabledCreditTypes, undefined);
   assert.equal(result.request.systemInstruction.parts[0].text, ANTIGRAVITY_DEFAULT_SYSTEM);
-  assert.equal(result.request.systemInstruction.parts.length, 1, "systemInstruction must contain only ANTIGRAVITY_DEFAULT_SYSTEM (#9030)");
+  assert.equal(
+    result.request.systemInstruction.parts.length,
+    1,
+    "systemInstruction must contain only ANTIGRAVITY_DEFAULT_SYSTEM (#9030)"
+  );
   // #9030 — Client system content moved to first user message to avoid upstream 429s
   assert.equal(result.request.contents[0].parts[0].text, "Project rules");
   assert.equal(result.request.contents[0].parts[1].text, "Read a file");
